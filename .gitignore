@@ -1,0 +1,14 @@
+# Dipendenze
+node_modules/
+
+# File di configurazione e Segreti (FONDAMENTALE!)
+.env
+.env.*
+
+# Build
+dist/
+
+# Log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

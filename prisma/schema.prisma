@@ -1,0 +1,99 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum SubscriptionPlan {
+  FREE
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum VentureStatus {
+  IDEATION
+  VALIDATION
+  OPERATIONAL
+  PIVOTED
+  ARCHIVED
+}
+
+model User {
+  id           String           @id @default(uuid())
+  email        String           @unique
+  passwordHash String
+  plan         SubscriptionPlan @default(FREE)
+  status       String           @default("active") // active, trialing, cancelled
+  
+  // Relazioni
+  budget       BudgetControl?
+  ventures     Venture[]
+  decisionLogs AIDecisionLog[]
+
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+}
+
+model Venture {
+  id            String          @id @default(uuid())
+  userId        String
+  user          User            @relation(fields: [userId], references: [id])
+  
+  name          String
+  niche         String
+  description   String          @db.Text
+  monthlyBudget Float           @default(0.0)
+  riskLevel     RiskLevel       @default(LOW)
+  status        VentureStatus   @default(IDEATION)
+  metrics       Json?           // Per salvare KPI futuri
+  
+  // Relazioni
+  logs          AIDecisionLog[]
+
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+}
+
+model AIDecisionLog {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  
+  ventureId     String?
+  venture       Venture? @relation(fields: [ventureId], references: [id])
+  
+  actionType    String   // es. "MARKET_VALIDATION", "IDEA_GEN"
+  inputPrompt   String   @db.Text
+  aiOutput      String   @db.Text
+  tokensUsed    Int      @default(0)
+  costEstimated Float    @default(0.0)
+  modelUsed     String   // es. "gpt-4-turbo"
+  
+  createdAt     DateTime @default(now())
+}
+
+model BudgetControl {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id])
+  
+  monthlyLimit  Float    @default(10.0) // Budget in dollari
+  usedThisMonth Float    @default(0.0)
+  hardStop      Boolean  @default(true) // Se true, blocca l'AI a budget esaurito
+  resetDate     DateTime
+  
+  updatedAt     DateTime @updatedAt
+}
