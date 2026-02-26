@@ -1,6 +1,6 @@
 // src/portfolio/ventures/venture.routes.ts
 import { Router } from 'express';
-import { generateVentures, createVenture } from './venture.controller'; // <-- Aggiunto createVenture
+import { generateVentures, createVenture, getVentures } from './venture.controller'; // <-- Aggiunto createVenture
 import { requireAuth } from '../../core/middlewares/auth.middleware';
 
 const router = Router();
@@ -10,5 +10,8 @@ router.post('/generate', requireAuth, generateVentures);
 
 // NUOVO Endpoint per salvare l'idea scelta nel database
 router.post('/', requireAuth, createVenture);
+
+// Rotta per LEGGERE le venture
+router.get('/', requireAuth, getVentures);
 
 export default router;

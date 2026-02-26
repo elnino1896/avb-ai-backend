@@ -59,3 +59,21 @@ export const createVenture = async (req: AuthRequest, res: Response): Promise<vo
     res.status(500).json({ error: 'Errore durante il salvataggio della venture.' });
   }
 };
+
+// NUOVA FUNZIONE: Recupera tutte le Venture dell'utente
+export const getVentures = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.id;
+    
+    // Peschiamo dal DB tutte le venture di questo utente, ordinate dalla più recente
+    const ventures = await prisma.venture.findMany({
+      where: { userId: userId },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.status(200).json({ data: ventures });
+  } catch (error) {
+    console.error('[Venture Error]:', error);
+    res.status(500).json({ error: 'Errore durante il recupero del portfolio.' });
+  }
+};
