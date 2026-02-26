@@ -30,12 +30,13 @@ app.use('/api/v1/ventures', ventureRoutes);
 
 app.use('/api/v1/users', userRoutes);
 
-app.use('/api/v1/validation', validationRoutes);
+//app.use('/api/v1/validation', validationRoutes);
 
 app.use('/api/v1/ventures', strategyRoutes);
 
 app.use('/api/v1/billing', billingRoutes);
 
+app.use('/api/v1/validation/market', validationRoutes);
 
 // Health Check
 app.get('/api/health', (req: Request, res: Response) => {
