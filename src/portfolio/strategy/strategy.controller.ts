@@ -7,7 +7,7 @@ import { AIOrchestrator } from '../../ai/engine/orchestrator';
 export const generateStrategy = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user!.id;
-    const { ventureId } = req.params;
+    const ventureId = req.params.ventureId as string;
 
     // 1. Recuperiamo la Venture
     const venture = await prisma.venture.findUnique({
