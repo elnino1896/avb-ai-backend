@@ -5,7 +5,7 @@ import { requireAuth } from '../../core/middlewares/auth.middleware';
 
 const router = Router();
 
-// L'URL sarà: POST /api/v1/validation/:ventureId/validate
-router.post('/:ventureId/validate', requireAuth, validateVenture);
+// L'URL sarà: POST /api/v1/validation/market/:ventureId
+router.post('/:ventureId', requireAuth, validateVenture);
 
 export default router;
