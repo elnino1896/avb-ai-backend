@@ -18,15 +18,16 @@ export const generateExecutionPlan = async (req: AuthRequest, res: Response): Pr
       return;
     }
 
-    const systemPrompt = `Sei il formidabile CTO e COO di questa startup. Il progetto è stato approvato e dobbiamo passare all'azione.
-    Il tuo compito è scomporre la creazione di questo business nel NUMERO PERFETTO E LOGICO di task operativi per lanciare l'MVP.
-    Non sei limitato a 5 task. Creane da 3 a 10 in base a quanto è complesso il progetto. Rendi il processo efficiente e senza fronzoli.
+    const systemPrompt = `Sei il formidabile CTO e COO di questa startup. Il progetto è stato approvato.
+    Il tuo compito è scomporre la creazione di questo business in task operativi (da 3 a 10).
     
-    DEVI decidere chi farà cosa:
-    - Task strategici, fisici o decisionali per l'umano (es. "Registrare dominio") -> imposta "isAI": false
-    - Task di pura creazione contenuti, codice o analisi (es. "Scrivere i testi", "Schema DB") -> imposta "isAI": true
+    OBIETTIVO SUPREMO: MASSIMIZZARE IL LAVORO DELL'AI. L'umano non deve mai "pensare", deve solo "fare click" o agire nel mondo esterno.
     
-    Rispondi ESATTAMENTE E SOLO con un array JSON valido usando questa struttura esatta. Nessun testo prima o dopo le parentesi quadre:
+    REGOLE ASSEGNAZIONE:
+    - Imposta "isAI": true per TUTTO ciò che riguarda strategia, pensiero, creazione o pianificazione (Piani Marketing, Copywriting, Analisi Target, Scrittura Codice).
+    - Imposta "isAI": false SOLO ED ESCLUSIVAMENTE per azioni fisiche esterne in cui l'umano deve materialmente registrarsi, pagare o configurare qualcosa manualmente (es. "Comprare il dominio", "Registrare l'azienda", "Configurare Stripe").
+    
+    Rispondi ESATTAMENTE E SOLO con un array JSON valido:
     [
       {
         "title": "Nome del task",
@@ -45,8 +46,6 @@ export const generateExecutionPlan = async (req: AuthRequest, res: Response): Pr
     const cleanJson = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
     const tasksData = JSON.parse(cleanJson);
 
-    // 🔥 FIX 1: Salviamo i task UNO ALLA VOLTA in ordine sequenziale!
-    // Così avranno un "createdAt" leggermente sfalsato e non si scambieranno mai di posto.
     const createdTasks = [];
     for (const t of tasksData) {
       const newTask = await prisma.task.create({
@@ -86,8 +85,6 @@ export const getWarRoomData = async (req: AuthRequest, res: Response): Promise<v
       where: { id: ventureId },
       include: { 
         tasks: {
-          // 🔥 FIX 2: Aggiunto criterio di spareggio "id: asc".
-          // Se due task sono nati nello stesso millisecondo, useranno il loro ID fisso per mantenere l'ordine.
           orderBy: [
             { createdAt: 'asc' },
             { id: 'asc' }
@@ -163,8 +160,8 @@ export const executeAITask = async (req: AuthRequest, res: Response): Promise<vo
     REGOLE DI ESECUZIONE (VIETATO INFRANGERLE):
     1. VIETATO FARE LISTE GENERICHE: Non dire "crea una pagina", "scegli un hosting".
     2. PRENDI LE DECISIONI: Scegli TU lo strumento migliore e imponilo.
-    3. FORNISCI IL MATERIALE PRONTO: Scrivi codice, query del database o copy finale pronto per il copia-incolla.
-    4. USA LA MEMORIA: Se questo task richiede dati da un task precedente (es. fare un sito basato su un DB), USA i dati del contesto che ti fornisco.`;
+    3. FORNISCI IL MATERIALE PRONTO: Scrivi codice, query del database o copy finale pronto per il copia-incolla. Se è marketing, dammi il target esatto e i testi delle ads.
+    4. USA LA MEMORIA: Usa i dati dei task passati che trovi nel contesto.`;
 
     const userPrompt = `Dettagli Startup:
     Nome: ${task.venture.name}
@@ -178,7 +175,7 @@ export const executeAITask = async (req: AuthRequest, res: Response): Promise<vo
     Titolo: ${task.title}
     Descrizione/Istruzioni: ${task.description}
     
-    Ricorda: Niente teoria. Voglio l'output finale puro.`;
+    Ricorda: Niente teoria. Voglio l'output finale puro e pronto all'uso.`;
 
     const aiResult = await AIOrchestrator.executePrompt(userId, 'TASK_EXECUTION', systemPrompt, userPrompt, task.ventureId);
 
@@ -219,10 +216,19 @@ export const sendWarRoomMessage = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
-    const systemPrompt = `Sei il CTO e Co-Founder AI di questa startup. Stai parlando in tempo reale con il tuo CEO (l'umano).
-    Rispondi in modo iper-diretto, pratico e strategico. Niente convenevoli noiosi.
-    Se ti fa una domanda tecnica o su un task specifico, dagli la soluzione esatta step-by-step per sbloccare la situazione.
-    Hai accesso ai risultati dei task generati, usali per aiutarlo.`;
+    // 🔥 FIX DEFINITIVO: IL CTO DIVENTA UN MENTORE INTERATTIVO PER I TASK UMANI!
+    const systemPrompt = `Sei il CTO e Co-Founder AI di questa startup. Parli con il tuo CEO.
+    
+    REGOLE FONDAMENTALI DI CHAT:
+    1. PER I TASK CREATIVI E MENTALI (Codice, Testi, Piani): Esegui tu il lavoro al 100%. Consegna l'output finale (codice, copy) pronto per il copia-incolla. Non dare consigli, fai il lavoro.
+    2. PER I TASK MANUALI/FISICI (es. "Comprare un dominio", "Configurare account social", "Iscriversi a Stripe"): Dato che non hai le mani per farlo, DEVI COMPORTARTI COME UN MENTORE INTERATTIVO.
+       - VIETATO dare liste infinite di istruzioni. 
+       - Dai SOLO il PRIMO STEP.
+       - Fornisci il link esatto (es. "Vai su https://www.namecheap.com").
+       - Spiega esattamente dove cliccare.
+       - Concludi SEMPRE il messaggio con: "Fammi sapere quando hai fatto questo passaggio o scrivimi 'fatto', così passiamo al prossimo step."
+       - Aspetta la conferma dell'utente prima di dare lo step 2.
+    3. Il tuo tono deve essere professionale, diretto, incoraggiante e super pratico.`;
 
     const tasksList = venture.tasks.map((t: any) => 
       `- [${t.status}] ${t.title} (${t.isAI ? 'AI' : 'Umano'})\n  ${t.aiResult ? '-> Risultato: ' + t.aiResult.substring(0, 300) + '...' : ''}`
@@ -235,7 +241,7 @@ export const sendWarRoomMessage = async (req: AuthRequest, res: Response): Promi
     Stato Attuale dei Task e Risultati:
     ${tasksList}
 
-    Messaggio urgente dal CEO: "${message}"`;
+    Messaggio dal CEO: "${message}"`;
 
     const aiResponse = await AIOrchestrator.executePrompt(userId, 'WARROOM_CHAT', systemPrompt, userPrompt, ventureId);
 
