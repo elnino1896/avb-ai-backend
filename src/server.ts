@@ -6,14 +6,14 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import ventureRoutes from './portfolio/ventures/venture.routes';
 
 // Importiamo le nostre rotte
 import authRoutes from './core/auth/auth.routes';
 import userRoutes from './users/user.routes';
-import validationRoutes from './validation/market/validation.routes';
+import ventureRoutes from './portfolio/ventures/venture.routes';
 import strategyRoutes from './portfolio/strategy/strategy.routes';
 import billingRoutes from './billing/billing.routes';
+import validationRoutes from './validation/market/validation.routes';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -25,18 +25,13 @@ app.use(express.json());
 
 // --- ROTTE API ---
 app.use('/api/v1/auth', authRoutes);
-
-app.use('/api/v1/ventures', ventureRoutes);
-
 app.use('/api/v1/users', userRoutes);
-
-//app.use('/api/v1/validation', validationRoutes);
-
-app.use('/api/v1/ventures', strategyRoutes);
-
+app.use('/api/v1/ventures', ventureRoutes);
 app.use('/api/v1/billing', billingRoutes);
-
 app.use('/api/v1/validation/market', validationRoutes);
+
+// LA MAGIA È QUI: Agganciamo la strategia alla rotta corretta!
+app.use('/api/v1/strategy', strategyRoutes);
 
 // Health Check
 app.get('/api/health', (req: Request, res: Response) => {
