@@ -256,3 +256,72 @@ export const sendWarRoomMessage = async (req: AuthRequest, res: Response): Promi
     }
   }
 };
+
+// Aggiungi questa funzione alla fine di src/execution/execution.controller.ts
+
+export const runBoardMeeting = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.id;
+    const ventureId = String(req.params.ventureId);
+    const { visitors, leads, customers, revenue, costs, notes } = req.body;
+
+    const venture = await prisma.venture.findUnique({
+      where: { id: ventureId }
+    });
+
+    if (!venture || venture.userId !== userId) {
+      res.status(404).json({ error: 'Venture non trovata.' });
+      return;
+    }
+
+    const systemPrompt = `Sei il "Board of Directors" (Consiglio di Amministrazione) AI di questa startup.
+    Il tuo compito è analizzare spietatamente le metriche mensili fornite dal CEO.
+    Non essere troppo gentile, sii fattuale e orientato ai numeri. Calcola i tassi di conversione (es. Visitatori -> Clienti) e i margini di profitto.
+    
+    Devi strutturare il tuo report iniziando SEMPRE con un VERDETTO in maiuscolo, scegliendo tra:
+    🟢 SCALE (I numeri sono ottimi, profittevoli o in forte crescita. Consiglia come scalare).
+    🟡 PIVOT (C'è trazione ma i costi sono alti o la conversione è bassa. Consiglia cosa sistemare).
+    🔴 KILL (I numeri sono disastrosi, zero trazione, stiamo bruciando soldi. Consiglia di staccare la spina e passare a una nuova idea).
+
+    Dopo il verdetto, dai un'analisi dei numeri e 3 AZIONI PRATICHE E IMMEDIATE da compiere questo mese.`;
+
+    const userPrompt = `Startup: ${venture.name} | Nicchia: ${venture.niche}
+    
+    📊 METRICHE DI QUESTO MESE:
+    - Visitatori Unici: ${visitors}
+    - Leads/Iscritti gratuiti: ${leads}
+    - Clienti Paganti: ${customers}
+    - Fatturato Mensile: $${revenue}
+    - Costi Mensili (Server, Ads, Software): $${costs}
+    
+    Note del CEO: "${notes || 'Nessuna nota aggiuntiva.'}"
+    
+    Genera il Report del Board Meeting.`;
+
+    const aiResult = await AIOrchestrator.executePrompt(userId, 'BOARD_MEETING', systemPrompt, userPrompt, ventureId);
+
+    // 🌟 LA GENIALATA: Salviamo il report come Task Completato!
+    // Così l'AI se ne ricorderà per sempre nelle chat future!
+    const dateStr = new Date().toLocaleDateString('it-IT');
+    const newTask = await prisma.task.create({
+      data: {
+        ventureId,
+        title: `📈 Board Meeting: Report Mensile (${dateStr})`,
+        description: `Dati inviati: ${visitors} visitatori, ${customers} clienti, $${revenue} fatturato, $${costs} costi.`,
+        isAI: true,
+        status: 'DONE',
+        aiResult: aiResult
+      }
+    });
+
+    res.status(200).json({ message: 'Board Meeting completato!', data: newTask });
+
+  } catch (error: any) {
+    console.error('[Board Meeting Error]:', error);
+    if (error.message === 'BUDGET_EXCEEDED') {
+      res.status(402).json({ error: 'Budget AI esaurito.' });
+    } else {
+      res.status(500).json({ error: 'Errore durante il Board Meeting.' });
+    }
+  }
+};
