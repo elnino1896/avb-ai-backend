@@ -274,16 +274,36 @@ export const runBoardMeeting = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
+    // 🔥 IL NUOVO PROMPT: Costringiamo l'AI a generare codice JSON per creare i Task
     const systemPrompt = `Sei il "Board of Directors" (Consiglio di Amministrazione) AI di questa startup.
     Il tuo compito è analizzare spietatamente le metriche mensili fornite dal CEO.
-    Non essere troppo gentile, sii fattuale e orientato ai numeri. Calcola i tassi di conversione (es. Visitatori -> Clienti) e i margini di profitto.
+    Calcola i tassi di conversione (es. Visitatori -> Clienti) e i margini di profitto (Runway/Burn rate).
     
-    Devi strutturare il tuo report iniziando SEMPRE con un VERDETTO in maiuscolo, scegliendo tra:
-    🟢 SCALE (I numeri sono ottimi, profittevoli o in forte crescita. Consiglia come scalare).
-    🟡 PIVOT (C'è trazione ma i costi sono alti o la conversione è bassa. Consiglia cosa sistemare).
-    🔴 KILL (I numeri sono disastrosi, zero trazione, stiamo bruciando soldi. Consiglia di staccare la spina e passare a una nuova idea).
+    DEVI STRUTTURARE LA TUA RISPOSTA ESCLUSIVAMENTE COME UN OGGETTO JSON VALIDO. Nessun testo prima o dopo le parentesi graffe.
+    
+    La struttura JSON DEVE essere esattamente questa:
+    {
+      "report": "Il tuo report completo formattato in Markdown. Inizia sempre con il VERDETTO in MAIUSCOLO (🟢 SCALE, 🟡 PIVOT, 🔴 KILL) seguito dall'analisi dura e cruda dei numeri.",
+      "newTasks": [
+        {
+          "title": "Nome Azione 1",
+          "description": "Descrizione dettagliata di cosa fare operativamente.",
+          "isAI": true o false
+        },
+        {
+          "title": "Nome Azione 2",
+          "description": "Descrizione dettagliata di cosa fare operativamente.",
+          "isAI": true o false
+        },
+        {
+          "title": "Nome Azione 3",
+          "description": "Descrizione dettagliata di cosa fare operativamente.",
+          "isAI": true o false
+        }
+      ]
+    }
 
-    Dopo il verdetto, dai un'analisi dei numeri e 3 AZIONI PRATICHE E IMMEDIATE da compiere questo mese.`;
+    REGOLE PER I NUOVI TASK: Imposta "isAI": true per lavori strategici, copy o codice. Imposta "isAI": false solo per lavori manuali o di pagamento.`;
 
     const userPrompt = `Startup: ${venture.name} | Nicchia: ${venture.niche}
     
@@ -292,29 +312,53 @@ export const runBoardMeeting = async (req: AuthRequest, res: Response): Promise<
     - Leads/Iscritti gratuiti: ${leads}
     - Clienti Paganti: ${customers}
     - Fatturato Mensile: $${revenue}
-    - Costi Mensili (Server, Ads, Software): $${costs}
+    - Costi Mensili: $${costs}
     
     Note del CEO: "${notes || 'Nessuna nota aggiuntiva.'}"
     
-    Genera il Report del Board Meeting.`;
+    Genera il Report e le 3 Azioni in formato JSON.`;
 
-    const aiResult = await AIOrchestrator.executePrompt(userId, 'BOARD_MEETING', systemPrompt, userPrompt, ventureId);
+    const aiResponse = await AIOrchestrator.executePrompt(userId, 'BOARD_MEETING', systemPrompt, userPrompt, ventureId);
 
-    // 🌟 LA GENIALATA: Salviamo il report come Task Completato!
-    // Così l'AI se ne ricorderà per sempre nelle chat future!
+    // 1. Estraiamo e leggiamo il JSON generato dall'AI
+    let parsedData;
+    try {
+      const cleanJson = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+      parsedData = JSON.parse(cleanJson);
+    } catch (e) {
+      console.error("Errore parse JSON Board:", aiResponse);
+      throw new Error('L\'AI non ha restituito un formato valido.');
+    }
+
+    // 2. Salviamo il Report testuale come "Task Completato" per la memoria storica
     const dateStr = new Date().toLocaleDateString('it-IT');
-    const newTask = await prisma.task.create({
+    const reportTask = await prisma.task.create({
       data: {
         ventureId,
         title: `📈 Board Meeting: Report Mensile (${dateStr})`,
-        description: `Dati inviati: ${visitors} visitatori, ${customers} clienti, $${revenue} fatturato, $${costs} costi.`,
+        description: `Metriche fornite: ${visitors} visitatori, ${customers} clienti, $${revenue} fatturato, $${costs} costi.`,
         isAI: true,
         status: 'DONE',
-        aiResult: aiResult
+        aiResult: parsedData.report
       }
     });
 
-    res.status(200).json({ message: 'Board Meeting completato!', data: newTask });
+    // 🌟 3. LA MAGIA: Creiamo i 3 nuovi Task Operativi e li mettiamo "Da Fare"!
+    const createdTasks = [];
+    for (const t of parsedData.newTasks) {
+      const newTask = await prisma.task.create({
+        data: {
+          ventureId,
+          title: `🎯 [Azione Mese] ${t.title}`,
+          description: t.description,
+          isAI: t.isAI,
+          status: 'TODO'
+        }
+      });
+      createdTasks.push(newTask);
+    }
+
+    res.status(200).json({ message: 'Board Meeting completato con successo!', data: reportTask });
 
   } catch (error: any) {
     console.error('[Board Meeting Error]:', error);
