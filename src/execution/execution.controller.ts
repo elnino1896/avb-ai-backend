@@ -7,7 +7,6 @@ import { AIOrchestrator } from '../ai/engine/orchestrator';
 export const generateExecutionPlan = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user!.id;
-    // Forziamo la conversione in stringa per calmare TypeScript
     const ventureId = String(req.params.ventureId);
 
     const venture = await prisma.venture.findUnique({
@@ -19,7 +18,6 @@ export const generateExecutionPlan = async (req: AuthRequest, res: Response): Pr
       return;
     }
 
-    // 🔥 FIX 1: TASK DINAMICI E NON PIÙ FISSI A 5
     const systemPrompt = `Sei il formidabile CTO e COO di questa startup. Il progetto è stato approvato e dobbiamo passare all'azione.
     Il tuo compito è scomporre la creazione di questo business nel NUMERO PERFETTO E LOGICO di task operativi per lanciare l'MVP.
     Non sei limitato a 5 task. Creane da 3 a 10 in base a quanto è complesso il progetto. Rendi il processo efficiente e senza fronzoli.
@@ -47,19 +45,21 @@ export const generateExecutionPlan = async (req: AuthRequest, res: Response): Pr
     const cleanJson = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
     const tasksData = JSON.parse(cleanJson);
 
-    const createdTasks = await Promise.all(
-      tasksData.map((t: any) => 
-        prisma.task.create({
-          data: {
-            ventureId,
-            title: t.title,
-            description: t.description,
-            isAI: t.isAI,
-            status: 'TODO'
-          }
-        })
-      )
-    );
+    // 🔥 FIX 1: Salviamo i task UNO ALLA VOLTA in ordine sequenziale!
+    // Così avranno un "createdAt" leggermente sfalsato e non si scambieranno mai di posto.
+    const createdTasks = [];
+    for (const t of tasksData) {
+      const newTask = await prisma.task.create({
+        data: {
+          ventureId,
+          title: t.title,
+          description: t.description,
+          isAI: t.isAI,
+          status: 'TODO'
+        }
+      });
+      createdTasks.push(newTask);
+    }
 
     await prisma.venture.update({
       where: { id: ventureId },
@@ -82,12 +82,16 @@ export const getWarRoomData = async (req: AuthRequest, res: Response): Promise<v
     const userId = req.user!.id;
     const ventureId = String(req.params.ventureId);
 
-    // Usiamo 'any' per bypassare i problemi di cache di Prisma su Render
     const venture: any = await prisma.venture.findUnique({
       where: { id: ventureId },
       include: { 
         tasks: {
-          orderBy: { createdAt: 'asc' }
+          // 🔥 FIX 2: Aggiunto criterio di spareggio "id: asc".
+          // Se due task sono nati nello stesso millisecondo, useranno il loro ID fisso per mantenere l'ordine.
+          orderBy: [
+            { createdAt: 'asc' },
+            { id: 'asc' }
+          ]
         } 
       }
     });
@@ -141,7 +145,6 @@ export const executeAITask = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    // 🔥 FIX 2: LA MEMORIA STORICA! Peschiamo i lavori precedenti
     const completedAITasks = await prisma.task.findMany({
       where: { 
         ventureId: task.ventureId, 
@@ -221,7 +224,6 @@ export const sendWarRoomMessage = async (req: AuthRequest, res: Response): Promi
     Se ti fa una domanda tecnica o su un task specifico, dagli la soluzione esatta step-by-step per sbloccare la situazione.
     Hai accesso ai risultati dei task generati, usali per aiutarlo.`;
 
-    // 🔥 FIX 3: Diamo alla Chat la memoria dei risultati! (Accorciamo il risultato per non intasare la memoria)
     const tasksList = venture.tasks.map((t: any) => 
       `- [${t.status}] ${t.title} (${t.isAI ? 'AI' : 'Umano'})\n  ${t.aiResult ? '-> Risultato: ' + t.aiResult.substring(0, 300) + '...' : ''}`
     ).join('\n');
@@ -241,7 +243,6 @@ export const sendWarRoomMessage = async (req: AuthRequest, res: Response): Promi
 
   } catch (error: any) {
     console.error('[War Room Chat Error]:', error);
-    // Controllo sul budget intatto!
     if (error.message === 'BUDGET_EXCEEDED') {
       res.status(402).json({ error: 'Budget AI esaurito.' });
     } else {
