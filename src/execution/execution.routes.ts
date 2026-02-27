@@ -1,6 +1,6 @@
 // src/execution/execution.routes.ts
 import { Router } from 'express';
-import { generateExecutionPlan } from './execution.controller';
+import { generateExecutionPlan, getWarRoomData } from './execution.controller';
 import { requireAuth } from '../core/middlewares/auth.middleware';
 
 const router = Router();
