@@ -1,14 +1,16 @@
 // src/execution/execution.routes.ts
 import { Router } from 'express';
-import { generateExecutionPlan, getWarRoomData } from './execution.controller';
+import { generateExecutionPlan, getWarRoomData, completeHumanTask, executeAITask } from './execution.controller';
 import { requireAuth } from '../core/middlewares/auth.middleware';
 
 const router = Router();
 
-// L'URL sarà: POST /api/v1/execution/:ventureId/plan
+// Creazione e Lettura War Room
 router.post('/:ventureId/plan', requireAuth, generateExecutionPlan);
-
-// 🔥 LA NUOVA ROTTA per leggere i dati
 router.get('/:ventureId', requireAuth, getWarRoomData);
+
+// 🔥 NUOVE ROTTE: Esecuzione Task
+router.put('/task/:taskId/complete', requireAuth, completeHumanTask);
+router.post('/task/:taskId/execute-ai', requireAuth, executeAITask);
 
 export default router;
