@@ -89,7 +89,11 @@ export const getWarRoomData = async (req: AuthRequest, res: Response): Promise<v
             { createdAt: 'asc' },
             { id: 'asc' }
           ]
-        } 
+        },
+        // 🔥 Aggiunto recupero cronologia chat
+        chatMessages: {
+          orderBy: { createdAt: 'asc' }
+        }
       }
     });
 
@@ -216,7 +220,20 @@ export const sendWarRoomMessage = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
-    // 🔥 FIX DEFINITIVO: IL CTO DIVENTA UN MENTORE INTERATTIVO PER I TASK UMANI!
+    // 🔥 1. Salviamo il messaggio del CEO nel Database
+    await prisma.chatMessage.create({
+      data: { ventureId, role: 'user', content: message }
+    });
+
+    // 🔥 2. Recuperiamo la cronologia recente (max 10)
+    const recentMessages = await prisma.chatMessage.findMany({
+      where: { ventureId },
+      orderBy: { createdAt: 'desc' },
+      take: 10
+    });
+    
+    const chatHistory = recentMessages.reverse().map(m => `${m.role === 'user' ? 'CEO' : 'CTO'}: ${m.content}`).join('\n\n');
+
     const systemPrompt = `Sei il CTO e Co-Founder AI di questa startup. Parli con il tuo CEO.
     
     REGOLE FONDAMENTALI DI CHAT:
@@ -241,9 +258,17 @@ export const sendWarRoomMessage = async (req: AuthRequest, res: Response): Promi
     Stato Attuale dei Task e Risultati:
     ${tasksList}
 
-    Messaggio dal CEO: "${message}"`;
+    📜 CRONOLOGIA RECENTE DELLA CHAT (Ultimi messaggi scambiati):
+    ${chatHistory}
+
+    Rispondi al CEO.`;
 
     const aiResponse = await AIOrchestrator.executePrompt(userId, 'WARROOM_CHAT', systemPrompt, userPrompt, ventureId);
+
+    // 🔥 3. Salviamo la risposta del CTO nel Database
+    await prisma.chatMessage.create({
+      data: { ventureId, role: 'ai', content: aiResponse }
+    });
 
     res.status(200).json({ reply: aiResponse });
 
@@ -256,8 +281,6 @@ export const sendWarRoomMessage = async (req: AuthRequest, res: Response): Promi
     }
   }
 };
-
-// Aggiungi questa funzione alla fine di src/execution/execution.controller.ts
 
 export const runBoardMeeting = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -274,7 +297,6 @@ export const runBoardMeeting = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    // 🔥 IL NUOVO PROMPT: Costringiamo l'AI a generare codice JSON per creare i Task
     const systemPrompt = `Sei il "Board of Directors" (Consiglio di Amministrazione) AI di questa startup.
     Il tuo compito è analizzare spietatamente le metriche mensili fornite dal CEO.
     Calcola i tassi di conversione (es. Visitatori -> Clienti) e i margini di profitto (Runway/Burn rate).
@@ -320,7 +342,6 @@ export const runBoardMeeting = async (req: AuthRequest, res: Response): Promise<
 
     const aiResponse = await AIOrchestrator.executePrompt(userId, 'BOARD_MEETING', systemPrompt, userPrompt, ventureId);
 
-    // 1. Estraiamo e leggiamo il JSON generato dall'AI
     let parsedData;
     try {
       const cleanJson = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -330,7 +351,6 @@ export const runBoardMeeting = async (req: AuthRequest, res: Response): Promise<
       throw new Error('L\'AI non ha restituito un formato valido.');
     }
 
-    // 2. Salviamo il Report testuale come "Task Completato" per la memoria storica
     const dateStr = new Date().toLocaleDateString('it-IT');
     const reportTask = await prisma.task.create({
       data: {
@@ -343,7 +363,6 @@ export const runBoardMeeting = async (req: AuthRequest, res: Response): Promise<
       }
     });
 
-    // 🌟 3. LA MAGIA: Creiamo i 3 nuovi Task Operativi e li mettiamo "Da Fare"!
     const createdTasks = [];
     for (const t of parsedData.newTasks) {
       const newTask = await prisma.task.create({

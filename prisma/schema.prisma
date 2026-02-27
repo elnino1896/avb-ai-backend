@@ -61,6 +61,7 @@ model Venture {
   metrics       Json?           // Per salvare KPI futuri
   aiStrategy    String?
   tasks         Task[]
+  chatMessages ChatMessage[]
   
   // Relazioni
   logs          AIDecisionLog[]
@@ -114,4 +115,14 @@ model Task {
   updatedAt   DateTime @updatedAt
 
   venture     Venture  @relation(fields: [ventureId], references: [id], onDelete: Cascade)
+}
+
+model ChatMessage {
+  id        String   @id @default(uuid())
+  ventureId String
+  role      String   // Può essere 'user' o 'ai'
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  venture   Venture  @relation(fields: [ventureId], references: [id], onDelete: Cascade)
 }
