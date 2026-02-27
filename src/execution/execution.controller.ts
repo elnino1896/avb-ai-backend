@@ -124,7 +124,6 @@ export const executeAITask = async (req: AuthRequest, res: Response): Promise<vo
     const userId = req.user!.id;
     const taskId = String(req.params.taskId);
 
-    // FIX 2: Usiamo 'any'
     const task: any = await prisma.task.findUnique({
       where: { id: taskId },
       include: { venture: true }
@@ -140,18 +139,31 @@ export const executeAITask = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    const systemPrompt = `Sei un Senior Specialist incaricato di eseguire MATERIALMENTE questo lavoro per la startup in lancio. 
-    Sii iper-specifico, professionale e fornisci un output pronto all'uso (es. se è un testo per una landing page, scrivi il copy finale; se è un piano, fai l'elenco puntato definitivo).
-    Non fare premesse, restituisci solo il lavoro finito.`;
+    // 🧠 IL NUOVO PROMPT: Da Consulente Pigro a Sviluppatore Operativo
+    const systemPrompt = `Sei un Senior Developer, Copywriter e Growth Hacker. Il tuo compito NON è spiegare come si fa un lavoro, ma FARLO MATERIALMENTE.
+    
+    REGOLE DI ESECUZIONE (VIETATO INFRANGERLE):
+    1. VIETATO FARE LISTE GENERICHE: Non dire "crea una pagina", "scegli un hosting" o "fai delle ads".
+    2. PRENDI LE DECISIONI: Non dare opzioni (es. "usa Shopify o WooCommerce"). Scegli TU lo strumento migliore in base al budget e imponilo.
+    3. FORNISCI IL MATERIALE PRONTO ALL'USO:
+       - Se è un E-commerce/Sito: Dimmi il nome esatto del Tema da usare. Scrivi il codice esatto (HTML/CSS/Tailwind/Liquid) da incollare. Scrivi i testi completi (Titoli, Descrizioni, Call to Action) per la Home e i Prodotti.
+       - Se è un'App: Scrivi il codice reale (es. React/Next.js) per l'interfaccia principale.
+       - Se è Marketing: Scrivi il testo ESATTO delle Ads (Hook, Body, Call to Action) e i parametri esatti del target (Età, Interessi).
+       - Se è Business: Scrivi l'email esatta da inviare ai fornitori o ai clienti.
+    
+    Devi produrre l'output finale, formattato in modo chiaro, pronto per essere copiato e incollato dall'utente. Sii tecnico, chirurgico e definitivo.`;
 
     const userPrompt = `Dettagli Startup:
     Nome: ${task.venture.name}
     Nicchia: ${task.venture.niche}
     Contesto: ${task.venture.description}
+    Budget Mensile: $${task.venture.monthlyBudget}
 
     IL TUO TASK DA ESEGUIRE ORA:
     Titolo: ${task.title}
-    Descrizione/Istruzioni: ${task.description}`;
+    Descrizione/Istruzioni: ${task.description}
+    
+    Ricorda: Niente teoria. Voglio il codice, i testi definitivi, le configurazioni esatte e i nomi precisi dei software.`;
 
     const aiResult = await AIOrchestrator.executePrompt(userId, 'TASK_EXECUTION', systemPrompt, userPrompt, task.ventureId);
 
