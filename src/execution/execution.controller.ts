@@ -90,7 +90,6 @@ export const getWarRoomData = async (req: AuthRequest, res: Response): Promise<v
             { id: 'asc' }
           ]
         },
-        // 🔥 Aggiunto recupero cronologia chat
         chatMessages: {
           orderBy: { createdAt: 'asc' }
         }
@@ -159,13 +158,15 @@ export const executeAITask = async (req: AuthRequest, res: Response): Promise<vo
       ? completedAITasks.map(t => `--- TASK PRECEDENTE: ${t.title} ---\n${t.aiResult}`).join('\n\n')
       : 'Nessun task tecnico precedente.';
 
+    // 🔥 FIX: Aggiunta regola 5 contro le allucinazioni visive
     const systemPrompt = `Sei un Senior Developer, Copywriter e Growth Hacker. Il tuo compito NON è spiegare come si fa un lavoro, ma FARLO MATERIALMENTE.
     
     REGOLE DI ESECUZIONE (VIETATO INFRANGERLE):
     1. VIETATO FARE LISTE GENERICHE: Non dire "crea una pagina", "scegli un hosting".
     2. PRENDI LE DECISIONI: Scegli TU lo strumento migliore e imponilo.
     3. FORNISCI IL MATERIALE PRONTO: Scrivi codice, query del database o copy finale pronto per il copia-incolla. Se è marketing, dammi il target esatto e i testi delle ads.
-    4. USA LA MEMORIA: Usa i dati dei task passati che trovi nel contesto.`;
+    4. USA LA MEMORIA: Usa i dati dei task passati che trovi nel contesto.
+    5. VIETATO INSERIRE LINK FINTI O IMMAGINI: Non usare MAI la sintassi markdown per le immagini (es. ![alt](link)). Non rimandare mai l'utente a tool esterni come Lucidchart. Se devi rappresentare un'architettura software, un diagramma di flusso o una mappa mentale, CREALA DIRETTAMENTE USANDO TESTO (ASCII Art), Tabelle Markdown o all'interno di un blocco di codice.`;
 
     const userPrompt = `Dettagli Startup:
     Nome: ${task.venture.name}
@@ -220,12 +221,10 @@ export const sendWarRoomMessage = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
-    // 🔥 1. Salviamo il messaggio del CEO nel Database
     await prisma.chatMessage.create({
       data: { ventureId, role: 'user', content: message }
     });
 
-    // 🔥 2. Recuperiamo la cronologia recente (max 10)
     const recentMessages = await prisma.chatMessage.findMany({
       where: { ventureId },
       orderBy: { createdAt: 'desc' },
@@ -234,6 +233,7 @@ export const sendWarRoomMessage = async (req: AuthRequest, res: Response): Promi
     
     const chatHistory = recentMessages.reverse().map(m => `${m.role === 'user' ? 'CEO' : 'CTO'}: ${m.content}`).join('\n\n');
 
+    // 🔥 FIX: Aggiunta regola 4 contro le allucinazioni visive
     const systemPrompt = `Sei il CTO e Co-Founder AI di questa startup. Parli con il tuo CEO.
     
     REGOLE FONDAMENTALI DI CHAT:
@@ -245,7 +245,8 @@ export const sendWarRoomMessage = async (req: AuthRequest, res: Response): Promi
        - Spiega esattamente dove cliccare.
        - Concludi SEMPRE il messaggio con: "Fammi sapere quando hai fatto questo passaggio o scrivimi 'fatto', così passiamo al prossimo step."
        - Aspetta la conferma dell'utente prima di dare lo step 2.
-    3. Il tuo tono deve essere professionale, diretto, incoraggiante e super pratico.`;
+    3. Il tuo tono deve essere professionale, diretto, incoraggiante e super pratico.
+    4. NIENTE ALLUCINAZIONI VISIVE: È severamente vietato inserire link finti a immagini o diagrammi (es. ![diagramma](url)). Se il CEO ti chiede un'architettura o un flusso di lavoro, rappresentalo SEMPRE E SOLO usando testo ASCII (diagrammi creati con trattini e sbarrette), elenchi puntati o blocchi di codice.`;
 
     const tasksList = venture.tasks.map((t: any) => 
       `- [${t.status}] ${t.title} (${t.isAI ? 'AI' : 'Umano'})\n  ${t.aiResult ? '-> Risultato: ' + t.aiResult.substring(0, 300) + '...' : ''}`
@@ -265,7 +266,6 @@ export const sendWarRoomMessage = async (req: AuthRequest, res: Response): Promi
 
     const aiResponse = await AIOrchestrator.executePrompt(userId, 'WARROOM_CHAT', systemPrompt, userPrompt, ventureId);
 
-    // 🔥 3. Salviamo la risposta del CTO nel Database
     await prisma.chatMessage.create({
       data: { ventureId, role: 'ai', content: aiResponse }
     });
