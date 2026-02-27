@@ -170,3 +170,60 @@ export const executeAITask = async (req: AuthRequest, res: Response): Promise<vo
     res.status(500).json({ error: 'Errore durante l\'esecuzione del task da parte dell\'AI.' });
   }
 };
+
+// Aggiungi questa funzione alla fine di src/execution/execution.controller.ts
+
+export const sendWarRoomMessage = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.id;
+    const ventureId = String(req.params.ventureId);
+    const { message } = req.body;
+
+    if (!message) {
+      res.status(400).json({ error: 'Il messaggio non può essere vuoto.' });
+      return;
+    }
+
+    // 1. Recuperiamo la Venture e i Task per dare CONTESTO all'AI
+    const venture: any = await prisma.venture.findUnique({
+      where: { id: ventureId },
+      include: { tasks: true }
+    });
+
+    if (!venture || venture.userId !== userId) {
+      res.status(404).json({ error: 'Venture non trovata.' });
+      return;
+    }
+
+    // 🧠 2. IL PROMPT DEL CTO IN CHAT
+    const systemPrompt = `Sei il CTO e Co-Founder AI di questa startup. Stai parlando in tempo reale con il tuo CEO (l'umano).
+    Rispondi in modo iper-diretto, pratico e strategico. Niente convenevoli noiosi.
+    Se ti fa una domanda tecnica, di marketing o su un task specifico, dagli la soluzione esatta step-by-step per sbloccare la situazione.
+    Sei un esecutore, non un filosofo.`;
+
+    // Prepariamo la lista dei task per fargli sapere a che punto siete
+    const tasksList = venture.tasks.map((t: any) => `- [${t.status}] ${t.title} (${t.isAI ? 'AI' : 'Umano'})`).join('\n');
+
+    const userPrompt = `Dettagli Startup:
+    Nome: ${venture.name}
+    Nicchia: ${venture.niche}
+    
+    Stato Attuale dei Task:
+    ${tasksList}
+
+    Messaggio urgente dal CEO: "${message}"`;
+
+    // 3. Facciamo rispondere l'Oracolo!
+    const aiResponse = await AIOrchestrator.executePrompt(userId, 'WARROOM_CHAT', systemPrompt, userPrompt, ventureId);
+
+    res.status(200).json({ reply: aiResponse });
+
+  } catch (error: any) {
+    console.error('[War Room Chat Error]:', error);
+    if (error.message === 'BUDGET_EXCEEDED') {
+      res.status(402).json({ error: 'Budget AI esaurito.' });
+    } else {
+      res.status(500).json({ error: 'Errore durante la comunicazione con il CTO.' });
+    }
+  }
+};
