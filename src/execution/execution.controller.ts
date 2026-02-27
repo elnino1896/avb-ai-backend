@@ -79,3 +79,32 @@ export const generateExecutionPlan = async (req: AuthRequest, res: Response): Pr
     res.status(500).json({ error: 'Errore durante la scomposizione in task.' });
   }
 };
+
+// Aggiungi questa funzione in fondo a src/execution/execution.controller.ts
+export const getWarRoomData = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.id;
+    const ventureId = req.params.ventureId as string;
+
+    // Recuperiamo la Venture e, grazie a Prisma, INCLUDIAMO I TASK collegati!
+    const venture = await prisma.venture.findUnique({
+      where: { id: ventureId },
+      include: { 
+        tasks: {
+          orderBy: { createdAt: 'asc' } // Li ordiniamo dal più vecchio al più nuovo
+        } 
+      }
+    });
+
+    if (!venture || venture.userId !== userId) {
+      res.status(404).json({ error: 'War Room non trovata.' });
+      return;
+    }
+
+    res.status(200).json({ data: venture });
+
+  } catch (error: any) {
+    console.error('[War Room Error]:', error);
+    res.status(500).json({ error: 'Errore nel caricamento della War Room.' });
+  }
+};
