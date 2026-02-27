@@ -7,9 +7,9 @@ import { AIOrchestrator } from '../ai/engine/orchestrator';
 export const generateExecutionPlan = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user!.id;
-    const ventureId = req.params.ventureId as string;
+    // FIX 1: Forziamo la conversione in stringa per calmare TypeScript
+    const ventureId = String(req.params.ventureId);
 
-    // 1. Recuperiamo la Venture
     const venture = await prisma.venture.findUnique({
       where: { id: ventureId }
     });
@@ -19,7 +19,6 @@ export const generateExecutionPlan = async (req: AuthRequest, res: Response): Pr
       return;
     }
 
-    // 🧠 2. IL PROMPT DEL CTO: Scomposizione in Task
     const systemPrompt = `Sei il formidabile CTO e COO di questa startup. Il progetto è stato approvato e dobbiamo passare all'azione.
     Il tuo compito è scomporre la creazione di questo business in ESATTAMENTE 5 task operativi fondamentali per lanciare l'MVP (Minimum Viable Product).
     
@@ -41,14 +40,11 @@ export const generateExecutionPlan = async (req: AuthRequest, res: Response): Pr
     Nicchia: ${venture.niche}
     Strategia o Descrizione: ${venture.aiStrategy || venture.description}`;
 
-    // 3. Eseguiamo l'AI
     const aiResponse = await AIOrchestrator.executePrompt(userId, 'EXECUTION_PLAN', systemPrompt, userPrompt, ventureId);
 
-    // 4. Puliamo e parsiamo l'array JSON
     const cleanJson = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
     const tasksData = JSON.parse(cleanJson);
 
-    // 5. Salviamo i task nel Database! 💾
     const createdTasks = await Promise.all(
       tasksData.map((t: any) => 
         prisma.task.create({
@@ -63,7 +59,6 @@ export const generateExecutionPlan = async (req: AuthRequest, res: Response): Pr
       )
     );
 
-    // 6. Promuoviamo la startup in "Fase Operativa"
     await prisma.venture.update({
       where: { id: ventureId },
       data: { status: 'OPERATIONAL' }
@@ -80,18 +75,17 @@ export const generateExecutionPlan = async (req: AuthRequest, res: Response): Pr
   }
 };
 
-// Aggiungi questa funzione in fondo a src/execution/execution.controller.ts
 export const getWarRoomData = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user!.id;
-    const ventureId = req.params.ventureId as string;
+    const ventureId = String(req.params.ventureId);
 
-    // Recuperiamo la Venture e, grazie a Prisma, INCLUDIAMO I TASK collegati!
-    const venture = await prisma.venture.findUnique({
+    // FIX 2: Usiamo 'any' per bypassare i problemi di cache di Prisma su Render
+    const venture: any = await prisma.venture.findUnique({
       where: { id: ventureId },
       include: { 
         tasks: {
-          orderBy: { createdAt: 'asc' } // Li ordiniamo dal più vecchio al più nuovo
+          orderBy: { createdAt: 'asc' }
         } 
       }
     });
@@ -109,12 +103,9 @@ export const getWarRoomData = async (req: AuthRequest, res: Response): Promise<v
   }
 };
 
-// Aggiungi queste due funzioni in fondo a src/execution/execution.controller.ts
-
-// 1. Funzione per l'Umano: Segna semplicemente il task come completato
 export const completeHumanTask = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { taskId } = req.params;
+    const taskId = String(req.params.taskId);
     
     const updatedTask = await prisma.task.update({
       where: { id: taskId },
@@ -128,14 +119,13 @@ export const completeHumanTask = async (req: AuthRequest, res: Response): Promis
   }
 };
 
-// 2. Funzione per l'AI: Esegue materialmente il lavoro! 🤖🔥
 export const executeAITask = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user!.id;
-    const { taskId } = req.params;
+    const taskId = String(req.params.taskId);
 
-    // Recuperiamo il task e la venture associata
-    const task = await prisma.task.findUnique({
+    // FIX 2: Usiamo 'any'
+    const task: any = await prisma.task.findUnique({
       where: { id: taskId },
       include: { venture: true }
     });
@@ -150,7 +140,6 @@ export const executeAITask = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    // 🧠 IL PROMPT ESECUTIVO: Diciamo all'AI di lavorare
     const systemPrompt = `Sei un Senior Specialist incaricato di eseguire MATERIALMENTE questo lavoro per la startup in lancio. 
     Sii iper-specifico, professionale e fornisci un output pronto all'uso (es. se è un testo per una landing page, scrivi il copy finale; se è un piano, fai l'elenco puntato definitivo).
     Non fare premesse, restituisci solo il lavoro finito.`;
@@ -164,15 +153,13 @@ export const executeAITask = async (req: AuthRequest, res: Response): Promise<vo
     Titolo: ${task.title}
     Descrizione/Istruzioni: ${task.description}`;
 
-    // Facciamo lavorare l'AI!
     const aiResult = await AIOrchestrator.executePrompt(userId, 'TASK_EXECUTION', systemPrompt, userPrompt, task.ventureId);
 
-    // Salviamo il lavoro e completiamo il task
     const updatedTask = await prisma.task.update({
       where: { id: taskId },
       data: { 
         status: 'DONE',
-        aiResult: aiResult // Salviamo il lavoro prodotto dall'AI!
+        aiResult: aiResult 
       }
     });
 
