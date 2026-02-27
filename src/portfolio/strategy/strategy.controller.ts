@@ -20,18 +20,29 @@ export const generateStrategy = async (req: AuthRequest, res: Response): Promise
     }
 
     if (venture.status !== 'VALIDATION') {
-      res.status(400).json({ error: 'La venture deve essere validata (Status: VALIDATION) prima di generare una strategia.' });
+      res.status(400).json({ error: 'La venture deve essere validata prima di generare una strategia.' });
       return;
     }
 
     // 2. Leggiamo il verdetto del Validation Engine
     const metrics = venture.metrics as any;
-    const isNoGo = metrics?.verdetto === 'NO-GO';
+    const isNoGo = String(metrics?.verdetto).toUpperCase().includes('NO-GO');
 
-    // 3. Prompt Dinamico: Se NO-GO facciamo Pivot, se GO facciamo Action Plan
+    // 🧠 3. IL NUOVO PROMPT DEL PIVOT: Turnaround Specialist
     const systemPrompt = isNoGo
-      ? `Sei un Senior Startup Advisor. L'idea fornita ha ricevuto un NO-GO (Score: ${metrics?.score}) perché la competizione è ${metrics?.competizione}. 
-         Devi suggerire un PIVOT RADICALE. Trova una sotto-nicchia specifica o un modello di business alternativo dove i $${venture.monthlyBudget} di budget mensile siano sufficienti per dominare. Fornisci la nuova rotta in 3 punti chiari.`
+      ? `Sei un genio del Turnaround aziendale. L'idea fornita ha appena ricevuto un disastroso NO-GO (Score: ${metrics?.score}/100) dal nostro comitato VC. Il motivo principale del fallimento era: competizione ${metrics?.competizione}.
+         Il tuo compito è salvare questa startup con un PIVOT RADICALE e trasformarla in un'idea da GO assoluto, tenendo conto che il budget è solo di $${venture.monthlyBudget}/mese.
+
+         DEVI formattare la tua risposta in testo normale usando ESATTAMENTE questa struttura:
+
+🔥 STRATEGIA DI PIVOT:
+[Spiega in 3 punti chiari come stravolgere il modello di business, la nicchia o il prodotto per sbaragliare la concorrenza]
+
+📈 NUOVO SCORE PREVISTO: [Inserisci un punteggio tra 85 e 98]/100
+✅ NUOVO VERDETTO: GO
+
+⚖️ CONFRONTO CON L'IDEA ORIGINALE:
+[Spiega in 2-3 righe perché questo pivot alza il punteggio da ${metrics?.score} a quello nuovo, risolvendo le criticità della prima idea].`
       : `Sei un COO esperto. L'idea ha ricevuto un GO. Scrivi un piano operativo chirurgico di 30 giorni per il lancio, ottimizzando il budget di $${venture.monthlyBudget}. Dividi in: Settimana 1, Settimana 2, Settimana 3, Settimana 4.`;
 
     const userPrompt = `Dettagli Venture Attuale:
@@ -48,12 +59,12 @@ export const generateStrategy = async (req: AuthRequest, res: Response): Promise
       ventureId
     );
 
-    // 5. Aggiorniamo lo stato della Venture E SALVIAMO LA STRATEGIA! 💾
+    // 5. Aggiorniamo lo stato della Venture e SALVIAMO LA STRATEGIA 💾
     const updatedVenture = await prisma.venture.update({
       where: { id: ventureId },
       data: {
         status: isNoGo ? 'PIVOTED' : 'OPERATIONAL',
-        aiStrategy: aiResponse // <--- IL PEZZO MANCANTE! Ora il testo va in cassaforte.
+        aiStrategy: aiResponse
       }
     });
 
