@@ -60,6 +60,7 @@ model Venture {
   status        VentureStatus   @default(IDEATION)
   metrics       Json?           // Per salvare KPI futuri
   aiStrategy    String?
+  tasks         Task[]
   
   // Relazioni
   logs          AIDecisionLog[]
@@ -97,4 +98,20 @@ model BudgetControl {
   resetDate     DateTime
   
   updatedAt     DateTime @updatedAt
+}
+
+// 🔥 AGGIUNGI TUTTO QUESTO NUOVO BLOCCO ALLA FINE DEL FILE
+model Task {
+  id          String   @id @default(uuid())
+  ventureId   String
+  title       String
+  description String
+  status      String   @default("TODO") // Gli stati saranno: TODO, IN_PROGRESS, DONE
+  isAI        Boolean  @default(false)  // Vero se questo task può farlo l'AI in automatico (es. scrivere copy)
+  aiResult    String?  // Qui salveremo il lavoro svolto dall'AI (es. il testo della landing page)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  venture     Venture  @relation(fields: [ventureId], references: [id], onDelete: Cascade)
 }

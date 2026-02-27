@@ -14,6 +14,7 @@ import ventureRoutes from './portfolio/ventures/venture.routes';
 import strategyRoutes from './portfolio/strategy/strategy.routes';
 import billingRoutes from './billing/billing.routes';
 import validationRoutes from './validation/market/validation.routes';
+import executionRoutes from './execution/execution.routes';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -33,6 +34,8 @@ app.use('/api/v1/validation/market', validationRoutes);
 // LA MAGIA È QUI: Agganciamo la strategia alla rotta corretta!
 app.use('/api/v1/strategy', strategyRoutes);
 
+app.use('/api/v1/execution', executionRoutes);
+
 // Health Check
 app.get('/api/health', (req: Request, res: Response) => {
   res.status(200).json({ status: 'online', message: 'AVB-AI Engine is running 🚀' });
@@ -42,5 +45,4 @@ app.get('/api/health', (req: Request, res: Response) => {
 app.listen(PORT, () => {
   console.log(`\n🚀 [AVB-AI] Server operativo sulla porta ${PORT}`);
 });
-
 
