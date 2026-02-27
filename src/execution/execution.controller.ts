@@ -7,7 +7,7 @@ import { AIOrchestrator } from '../ai/engine/orchestrator';
 export const generateExecutionPlan = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user!.id;
-    // FIX 1: Forziamo la conversione in stringa per calmare TypeScript
+    // Forziamo la conversione in stringa per calmare TypeScript
     const ventureId = String(req.params.ventureId);
 
     const venture = await prisma.venture.findUnique({
@@ -19,12 +19,14 @@ export const generateExecutionPlan = async (req: AuthRequest, res: Response): Pr
       return;
     }
 
+    // 🔥 FIX 1: TASK DINAMICI E NON PIÙ FISSI A 5
     const systemPrompt = `Sei il formidabile CTO e COO di questa startup. Il progetto è stato approvato e dobbiamo passare all'azione.
-    Il tuo compito è scomporre la creazione di questo business in ESATTAMENTE 5 task operativi fondamentali per lanciare l'MVP (Minimum Viable Product).
+    Il tuo compito è scomporre la creazione di questo business nel NUMERO PERFETTO E LOGICO di task operativi per lanciare l'MVP.
+    Non sei limitato a 5 task. Creane da 3 a 10 in base a quanto è complesso il progetto. Rendi il processo efficiente e senza fronzoli.
     
     DEVI decidere chi farà cosa:
-    - Task strategici, fisici o decisionali per l'umano (es. "Registrare dominio", "Contattare 5 clienti") -> imposta "isAI": false
-    - Task di pura creazione contenuti, codice o analisi (es. "Scrivere i testi della Landing Page", "Strutturare lo schema del database") -> imposta "isAI": true
+    - Task strategici, fisici o decisionali per l'umano (es. "Registrare dominio") -> imposta "isAI": false
+    - Task di pura creazione contenuti, codice o analisi (es. "Scrivere i testi", "Schema DB") -> imposta "isAI": true
     
     Rispondi ESATTAMENTE E SOLO con un array JSON valido usando questa struttura esatta. Nessun testo prima o dopo le parentesi quadre:
     [
@@ -80,7 +82,7 @@ export const getWarRoomData = async (req: AuthRequest, res: Response): Promise<v
     const userId = req.user!.id;
     const ventureId = String(req.params.ventureId);
 
-    // FIX 2: Usiamo 'any' per bypassare i problemi di cache di Prisma su Render
+    // Usiamo 'any' per bypassare i problemi di cache di Prisma su Render
     const venture: any = await prisma.venture.findUnique({
       where: { id: ventureId },
       include: { 
@@ -139,31 +141,41 @@ export const executeAITask = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    // 🧠 IL NUOVO PROMPT: Da Consulente Pigro a Sviluppatore Operativo
+    // 🔥 FIX 2: LA MEMORIA STORICA! Peschiamo i lavori precedenti
+    const completedAITasks = await prisma.task.findMany({
+      where: { 
+        ventureId: task.ventureId, 
+        status: 'DONE', 
+        isAI: true, 
+        aiResult: { not: null } 
+      }
+    });
+    
+    const contextMemory = completedAITasks.length > 0 
+      ? completedAITasks.map(t => `--- TASK PRECEDENTE: ${t.title} ---\n${t.aiResult}`).join('\n\n')
+      : 'Nessun task tecnico precedente.';
+
     const systemPrompt = `Sei un Senior Developer, Copywriter e Growth Hacker. Il tuo compito NON è spiegare come si fa un lavoro, ma FARLO MATERIALMENTE.
     
     REGOLE DI ESECUZIONE (VIETATO INFRANGERLE):
-    1. VIETATO FARE LISTE GENERICHE: Non dire "crea una pagina", "scegli un hosting" o "fai delle ads".
-    2. PRENDI LE DECISIONI: Non dare opzioni (es. "usa Shopify o WooCommerce"). Scegli TU lo strumento migliore in base al budget e imponilo.
-    3. FORNISCI IL MATERIALE PRONTO ALL'USO:
-       - Se è un E-commerce/Sito: Dimmi il nome esatto del Tema da usare. Scrivi il codice esatto (HTML/CSS/Tailwind/Liquid) da incollare. Scrivi i testi completi (Titoli, Descrizioni, Call to Action) per la Home e i Prodotti.
-       - Se è un'App: Scrivi il codice reale (es. React/Next.js) per l'interfaccia principale.
-       - Se è Marketing: Scrivi il testo ESATTO delle Ads (Hook, Body, Call to Action) e i parametri esatti del target (Età, Interessi).
-       - Se è Business: Scrivi l'email esatta da inviare ai fornitori o ai clienti.
-    
-    Devi produrre l'output finale, formattato in modo chiaro, pronto per essere copiato e incollato dall'utente. Sii tecnico, chirurgico e definitivo.`;
+    1. VIETATO FARE LISTE GENERICHE: Non dire "crea una pagina", "scegli un hosting".
+    2. PRENDI LE DECISIONI: Scegli TU lo strumento migliore e imponilo.
+    3. FORNISCI IL MATERIALE PRONTO: Scrivi codice, query del database o copy finale pronto per il copia-incolla.
+    4. USA LA MEMORIA: Se questo task richiede dati da un task precedente (es. fare un sito basato su un DB), USA i dati del contesto che ti fornisco.`;
 
     const userPrompt = `Dettagli Startup:
     Nome: ${task.venture.name}
     Nicchia: ${task.venture.niche}
     Contesto: ${task.venture.description}
-    Budget Mensile: $${task.venture.monthlyBudget}
 
-    IL TUO TASK DA ESEGUIRE ORA:
+    📜 MEMORIA DEI TASK GIÀ COMPLETATI (Usali come base costruttiva!):
+    ${contextMemory}
+
+    🎯 IL TUO TASK DA ESEGUIRE ORA:
     Titolo: ${task.title}
     Descrizione/Istruzioni: ${task.description}
     
-    Ricorda: Niente teoria. Voglio il codice, i testi definitivi, le configurazioni esatte e i nomi precisi dei software.`;
+    Ricorda: Niente teoria. Voglio l'output finale puro.`;
 
     const aiResult = await AIOrchestrator.executePrompt(userId, 'TASK_EXECUTION', systemPrompt, userPrompt, task.ventureId);
 
@@ -183,8 +195,6 @@ export const executeAITask = async (req: AuthRequest, res: Response): Promise<vo
   }
 };
 
-// Aggiungi questa funzione alla fine di src/execution/execution.controller.ts
-
 export const sendWarRoomMessage = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user!.id;
@@ -196,7 +206,6 @@ export const sendWarRoomMessage = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
-    // 1. Recuperiamo la Venture e i Task per dare CONTESTO all'AI
     const venture: any = await prisma.venture.findUnique({
       where: { id: ventureId },
       include: { tasks: true }
@@ -207,31 +216,32 @@ export const sendWarRoomMessage = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
-    // 🧠 2. IL PROMPT DEL CTO IN CHAT
     const systemPrompt = `Sei il CTO e Co-Founder AI di questa startup. Stai parlando in tempo reale con il tuo CEO (l'umano).
     Rispondi in modo iper-diretto, pratico e strategico. Niente convenevoli noiosi.
-    Se ti fa una domanda tecnica, di marketing o su un task specifico, dagli la soluzione esatta step-by-step per sbloccare la situazione.
-    Sei un esecutore, non un filosofo.`;
+    Se ti fa una domanda tecnica o su un task specifico, dagli la soluzione esatta step-by-step per sbloccare la situazione.
+    Hai accesso ai risultati dei task generati, usali per aiutarlo.`;
 
-    // Prepariamo la lista dei task per fargli sapere a che punto siete
-    const tasksList = venture.tasks.map((t: any) => `- [${t.status}] ${t.title} (${t.isAI ? 'AI' : 'Umano'})`).join('\n');
+    // 🔥 FIX 3: Diamo alla Chat la memoria dei risultati! (Accorciamo il risultato per non intasare la memoria)
+    const tasksList = venture.tasks.map((t: any) => 
+      `- [${t.status}] ${t.title} (${t.isAI ? 'AI' : 'Umano'})\n  ${t.aiResult ? '-> Risultato: ' + t.aiResult.substring(0, 300) + '...' : ''}`
+    ).join('\n');
 
     const userPrompt = `Dettagli Startup:
     Nome: ${venture.name}
     Nicchia: ${venture.niche}
     
-    Stato Attuale dei Task:
+    Stato Attuale dei Task e Risultati:
     ${tasksList}
 
     Messaggio urgente dal CEO: "${message}"`;
 
-    // 3. Facciamo rispondere l'Oracolo!
     const aiResponse = await AIOrchestrator.executePrompt(userId, 'WARROOM_CHAT', systemPrompt, userPrompt, ventureId);
 
     res.status(200).json({ reply: aiResponse });
 
   } catch (error: any) {
     console.error('[War Room Chat Error]:', error);
+    // Controllo sul budget intatto!
     if (error.message === 'BUDGET_EXCEEDED') {
       res.status(402).json({ error: 'Budget AI esaurito.' });
     } else {
