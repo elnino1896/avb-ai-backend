@@ -48,11 +48,12 @@ export const generateStrategy = async (req: AuthRequest, res: Response): Promise
       ventureId
     );
 
-    // 5. Aggiorniamo lo stato della Venture
+    // 5. Aggiorniamo lo stato della Venture E SALVIAMO LA STRATEGIA! 💾
     const updatedVenture = await prisma.venture.update({
       where: { id: ventureId },
       data: {
         status: isNoGo ? 'PIVOTED' : 'OPERATIONAL',
+        aiStrategy: aiResponse // <--- IL PEZZO MANCANTE! Ora il testo va in cassaforte.
       }
     });
 

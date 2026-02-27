@@ -59,6 +59,7 @@ model Venture {
   riskLevel     RiskLevel       @default(LOW)
   status        VentureStatus   @default(IDEATION)
   metrics       Json?           // Per salvare KPI futuri
+  aiStrategy    String?
   
   // Relazioni
   logs          AIDecisionLog[]
