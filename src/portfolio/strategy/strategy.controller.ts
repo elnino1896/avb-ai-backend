@@ -28,21 +28,28 @@ export const generateStrategy = async (req: AuthRequest, res: Response): Promise
     const metrics = venture.metrics as any;
     const isNoGo = String(metrics?.verdetto).toUpperCase().includes('NO-GO');
 
-    // 🧠 3. IL NUOVO PROMPT DEL PIVOT: Turnaround Specialist
+    // 🧠 3. IL NUOVO PROMPT DEL PIVOT: Strategia Reale e Difendibile
     const systemPrompt = isNoGo
-      ? `Sei un genio del Turnaround aziendale. L'idea fornita ha appena ricevuto un disastroso NO-GO (Score: ${metrics?.score}/100) dal nostro comitato VC. Il motivo principale del fallimento era: competizione ${metrics?.competizione}.
-         Il tuo compito è salvare questa startup con un PIVOT RADICALE e trasformarla in un'idea da GO assoluto, tenendo conto che il budget è solo di $${venture.monthlyBudget}/mese.
+      ? `Sei un Senior Product Strategist di fama mondiale. Questa startup ha appena fallito la validazione di mercato (Score: ${metrics?.score}/100).
+         Motivazione del fallimento: ${metrics?.spiegazione || 'Competizione troppo alta o margini troppo bassi'}.
+         Budget mensile disponibile per il lancio: $${venture.monthlyBudget}.
 
-         DEVI formattare la tua risposta in testo normale usando ESATTAMENTE questa struttura:
+         Il tuo compito NON è inventare numeri fittizi, ma progettare un PIVOT REALE e difendibile che trasformerebbe questo fallimento in un business profittevole.
+         Per farlo, devi applicare obbligatoriamente una di queste tre strategie: 
+         1) "Niche Down" (iper-specializzazione su un target minuscolo ma altospendente).
+         2) "Platform Shift" (cambiare completamente il canale di acquisizione o il formato del prodotto).
+         3) "Monetization Flip" (offrire il prodotto gratis e far pagare qualcos'altro).
+
+         Formatta la tua risposta in testo normale usando ESATTAMENTE questa struttura:
 
 🔥 STRATEGIA DI PIVOT:
-[Spiega in 3 punti chiari come stravolgere il modello di business, la nicchia o il prodotto per sbaragliare la concorrenza]
+[Spiega in 3 punti operativi come stravolgere il prodotto per aggirare la competizione e i limiti di budget]
 
-📈 NUOVO SCORE PREVISTO: [Inserisci un punteggio tra 85 e 98]/100
-✅ NUOVO VERDETTO: GO
+🎯 IL NUOVO VANTAGGIO COMPETITIVO (BLUE OCEAN):
+[Spiega in 2 righe qual è la "Unique Value Proposition" che rende irrilevanti i competitor attuali]
 
-⚖️ CONFRONTO CON L'IDEA ORIGINALE:
-[Spiega in 2-3 righe perché questo pivot alza il punteggio da ${metrics?.score} a quello nuovo, risolvendo le criticità della prima idea].`
+⚖️ PERCHÉ ORA PASSEREBBE LA VALIDAZIONE:
+[Spiega razionalmente, in base alla marginalità e alle barriere all'ingresso, perché questo pivot merita un GO e risolve le criticità del pitch originale].`
       : `Sei un COO esperto. L'idea ha ricevuto un GO. Scrivi un piano operativo chirurgico di 30 giorni per il lancio, ottimizzando il budget di $${venture.monthlyBudget}. Dividi in: Settimana 1, Settimana 2, Settimana 3, Settimana 4.`;
 
     const userPrompt = `Dettagli Venture Attuale:
