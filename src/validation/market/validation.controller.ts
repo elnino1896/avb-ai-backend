@@ -8,8 +8,11 @@ export const validateVenture = async (req: AuthRequest, res: Response): Promise<
   try {
     const userId = req.user!.id;
     const ventureId = req.params.ventureId as string;
+    
+    // 🔥 1. CATTURIAMO IL CONTESTO EXTRA DAL FRONTEND (La tua ribattuta)
+    const { extraContext } = req.body || {};
 
-    // 1. Recuperiamo la Venture dal database
+    // 2. Recuperiamo la Venture dal database
     const venture = await prisma.venture.findUnique({
       where: { id: ventureId }
     });
@@ -19,12 +22,13 @@ export const validateVenture = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    if (venture.status !== 'IDEATION') {
-      res.status(400).json({ error: 'Questa venture è già stata validata o è in uno stato avanzato.' });
+    // 🔥 FIX SBLOCCO: Permettiamo l'analisi sia se è nuova (IDEATION) sia se è un ricalcolo (VALIDATION)
+    if (venture.status !== 'IDEATION' && venture.status !== 'VALIDATION') {
+      res.status(400).json({ error: 'Questa venture è già in fase operativa e non può essere ri-validata.' });
       return;
     }
 
-    // 🧠 2. IL NUOVO CERVELLO: VC Severo ma Giusto (Con spiegazione!)
+    // 🧠 3. IL NUOVO CERVELLO: VC Severo ma Giusto
     const systemPrompt = `Sei un Partner di Venture Capital di livello mondiale (stile Y Combinator).
     Il tuo compito è analizzare oggettivamente e razionalmente le idee di startup in base a:
     1. Painkiller vs Vitamin (Risolve un problema reale e doloroso?)
@@ -46,31 +50,36 @@ export const validateVenture = async (req: AuthRequest, res: Response): Promise<
     "spiegazione" (stringa: 3 o 4 frasi spietate in cui motivi nel dettaglio perché hai dato questo verdetto e punteggio).
     Non aggiungere nessun altro testo, markdown, o spiegazione fuori dal JSON.`;
 
+    // 🔥 INIETTIAMO LA NOTA DEL FOUNDER (SE ESISTE) COME COMANDO ASSOLUTO
+    const contextAddition = extraContext 
+      ? `\n\n⚠️ NOTA URGENTE DAL FOUNDER (Diritto di Replica):\n"${extraContext}"\n-> Tieni ASSOLUTAMENTE CONTO di questa nota per ricalcolare i costi, le barriere all'ingresso e il verdetto finale.` 
+      : '';
+
     const userPrompt = `Analizza questa startup:
     Nome: ${venture.name}
     Nicchia: ${venture.niche}
     Descrizione: ${venture.description}
-    Budget Mensile a disposizione: $${venture.monthlyBudget}`;
+    Budget Mensile a disposizione: $${venture.monthlyBudget}${contextAddition}`;
 
-    // 3. Eseguiamo l'analisi scalando il budget
+    // 4. Eseguiamo l'analisi scalando il budget
     const aiResponse = await AIOrchestrator.executePrompt(
       userId,
       'MARKET_VALIDATION',
       systemPrompt,
       userPrompt,
-      ventureId // Colleghiamo questo log direttamente alla Venture!
+      ventureId 
     );
 
-    // 4. Pulizia e Parsing del JSON restituito dall'AI
+    // 5. Pulizia e Parsing del JSON restituito dall'AI
     const cleanJson = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
     const metrics = JSON.parse(cleanJson);
 
-    // 5. Aggiorniamo la Venture nel Database
+    // 6. Aggiorniamo la Venture nel Database
     const updatedVenture = await prisma.venture.update({
       where: { id: ventureId },
       data: {
         status: 'VALIDATION',
-        metrics: metrics // Salviamo i KPI calcolati dall'AI
+        metrics: metrics // Salviamo i KPI calcolati dall'AI aggiornati!
       }
     });
 
