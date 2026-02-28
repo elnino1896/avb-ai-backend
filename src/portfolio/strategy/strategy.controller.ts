@@ -51,7 +51,7 @@ export const generateStrategy = async (req: AuthRequest, res: Response): Promise
 [Spiega perché questo pivot risolve le criticità]
 
 🔌 AUTOMAZIONE GIORNALIERA:
-[Descrivi un'operazione quotidiana e noiosa (es. cercare lead, raschiare dati, analizzare trend) che l'AI può fare in background ogni giorno per QUESTO NUOVO BUSINESS. Sii specifico].`
+[Descrivi un'operazione quotidiana di RICERCA ESTERNA che l'AI può fare per aiutare il Founder a far crescere il business (es. raschiare Reddit per trovare clienti, monitorare i prezzi dei competitor, cercare lead su LinkedIn, trovare trend su Google). NON proporre funzioni interne al prodotto (es. non proporre di analizzare i dati degli utenti dell'app, perché l'app non esiste ancora!). Sii specifico e indica siti web reali da scansionare].`
       : `Sei un COO esperto. L'idea ha ricevuto un GO. Scrivi un piano operativo chirurgico di 30 giorni per il lancio, ottimizzando il budget di $${venture.monthlyBudget}. Dividi in: Settimana 1, Settimana 2, Settimana 3, Settimana 4.`;
 
     const userPrompt = `Dettagli Venture Attuale:

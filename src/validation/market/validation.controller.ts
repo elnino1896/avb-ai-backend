@@ -26,7 +26,7 @@ export const validateVenture = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    // 🧠 3. IL NUOVO CERVELLO: VC + Architetto di Automazioni
+    // 🧠 3. IL NUOVO CERVELLO: VC + Architetto di Automazioni Severo
     const systemPrompt = `Sei un Partner di Venture Capital di livello mondiale e un Ingegnere di Automazione AI.
     Il tuo compito è analizzare oggettivamente l'idea di startup e, parallelamente, ideare un "Agente AI Autonomo".
     
@@ -41,7 +41,7 @@ export const validateVenture = async (req: AuthRequest, res: Response): Promise<
     - Se l'idea ha potenziale, dai "GO" (score 60-95). 
 
     REGOLA D'ORO AUTOMAZIONE (MAGIA NERA):
-    Pensa a un'operazione quotidiana e noiosa che questa startup richiede (es. cercare trend, analizzare competitor, trovare lead, estrarre modelli 3D gratuiti da siti come Printables per rivenderli). Inventa un'automazione che IO (il sistema AI) potrò fare ogni giorno in background per l'utente.
+    Pensa a un'operazione quotidiana e noiosa di RICERCA ESTERNA o GROWTH HACKING che l'AI può fare in background per aiutare il Founder (es. raschiare Reddit/LinkedIn per trovare clienti, monitorare i prezzi dei competitor, estrarre modelli 3D gratuiti da Printables). NON proporre funzioni interne al prodotto (es. non proporre di analizzare i dati degli utenti o di creare report per l'app finale, l'app non esiste ancora!). L'automazione deve servire al CEO per validare o far crescere il business.
 
     Devi rispondere ESATTAMENTE ed ESCLUSIVAMENTE con un oggetto JSON valido contenente queste chiavi:
     "competizione" (stringa),
@@ -50,7 +50,7 @@ export const validateVenture = async (req: AuthRequest, res: Response): Promise<
     "score" (numero intero da 1 a 100),
     "verdetto" (stringa: "GO" o "NO-GO"),
     "spiegazione" (stringa: 3 frasi spietate in cui motivi il verdetto),
-    "automazione" (stringa: Descrivi un'automazione giornaliera utilissima che l'AI può fare per questo business. Se non serve, scrivi "Nessuna automazione strettamente necessaria").
+    "automazione" (stringa: Descrivi un'automazione di ricerca o scraping giornaliera. Sii specifico, indica siti reali. Se non serve, scrivi "Nessuna automazione strettamente necessaria").
     Non aggiungere nessun altro testo fuori dal JSON.`;
 
     const contextAddition = extraContext 
