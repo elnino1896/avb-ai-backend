@@ -28,28 +28,30 @@ export const generateStrategy = async (req: AuthRequest, res: Response): Promise
     const metrics = venture.metrics as any;
     const isNoGo = String(metrics?.verdetto).toUpperCase().includes('NO-GO');
 
-    // 🧠 3. IL NUOVO PROMPT DEL PIVOT: Strategia Reale e Difendibile
+    // 🧠 3. IL NUOVO PROMPT DEL PIVOT: Strategia + Nuova Automazione
     const systemPrompt = isNoGo
-      ? `Sei un Senior Product Strategist di fama mondiale. Questa startup ha appena fallito la validazione di mercato (Score: ${metrics?.score}/100).
-         Motivazione del fallimento: ${metrics?.spiegazione || 'Competizione troppo alta o margini troppo bassi'}.
-         Budget mensile disponibile per il lancio: $${venture.monthlyBudget}.
+      ? `Sei un Senior Product Strategist e Architetto di Automazioni AI. Questa startup ha fallito la validazione di mercato (Score: ${metrics?.score}/100).
+         Motivazione del fallimento: ${metrics?.spiegazione || 'Competizione troppo alta o margini bassi'}.
+         Budget mensile: $${venture.monthlyBudget}.
 
-         Il tuo compito NON è inventare numeri fittizi, ma progettare un PIVOT REALE e difendibile che trasformerebbe questo fallimento in un business profittevole.
-         Per farlo, devi applicare obbligatoriamente una di queste tre strategie: 
-         1) "Niche Down" (iper-specializzazione su un target minuscolo ma altospendente).
-         2) "Platform Shift" (cambiare completamente il canale di acquisizione o il formato del prodotto).
-         3) "Monetization Flip" (offrire il prodotto gratis e far pagare qualcos'altro).
+         PROGETTA UN PIVOT REALE e difendibile applicando una di queste 3 strategie: 
+         1) "Niche Down" 
+         2) "Platform Shift" 
+         3) "Monetization Flip"
 
-         Formatta la tua risposta in testo normale usando ESATTAMENTE questa struttura:
+         Formatta la tua risposta usando ESATTAMENTE questa struttura:
 
 🔥 STRATEGIA DI PIVOT:
-[Spiega in 3 punti operativi come stravolgere il prodotto per aggirare la competizione e i limiti di budget]
+[Spiega in 3 punti operativi come stravolgere il prodotto]
 
-🎯 IL NUOVO VANTAGGIO COMPETITIVO (BLUE OCEAN):
-[Spiega in 2 righe qual è la "Unique Value Proposition" che rende irrilevanti i competitor attuali]
+🎯 IL NUOVO VANTAGGIO COMPETITIVO:
+[Spiega in 2 righe la Unique Value Proposition]
 
-⚖️ PERCHÉ ORA PASSEREBBE LA VALIDAZIONE:
-[Spiega razionalmente, in base alla marginalità e alle barriere all'ingresso, perché questo pivot merita un GO e risolve le criticità del pitch originale].`
+⚖️ PERCHÉ ORA FUNZIONA:
+[Spiega perché questo pivot risolve le criticità]
+
+🔌 AUTOMAZIONE GIORNALIERA:
+[Descrivi un'operazione quotidiana e noiosa (es. cercare lead, raschiare dati, analizzare trend) che l'AI può fare in background ogni giorno per QUESTO NUOVO BUSINESS. Sii specifico].`
       : `Sei un COO esperto. L'idea ha ricevuto un GO. Scrivi un piano operativo chirurgico di 30 giorni per il lancio, ottimizzando il budget di $${venture.monthlyBudget}. Dividi in: Settimana 1, Settimana 2, Settimana 3, Settimana 4.`;
 
     const userPrompt = `Dettagli Venture Attuale:
@@ -66,18 +68,30 @@ export const generateStrategy = async (req: AuthRequest, res: Response): Promise
       ventureId
     );
 
-    // 5. Aggiorniamo lo stato della Venture e SALVIAMO LA STRATEGIA 💾
+    // 🔥 5. LO SPLIT MAGICO: Separiamo la Strategia dall'Automazione
+    let finalStrategy = aiResponse;
+    let newAutomation = null;
+
+    if (isNoGo && aiResponse.includes('🔌 AUTOMAZIONE GIORNALIERA:')) {
+      const parts = aiResponse.split('🔌 AUTOMAZIONE GIORNALIERA:');
+      finalStrategy = parts[0].trim(); // Tutto ciò che viene prima (La strategia)
+      newAutomation = parts[1].trim(); // Tutto ciò che viene dopo (La nuova automazione)
+    }
+
+    // 6. Aggiorniamo lo stato della Venture e SALVIAMO TUTTO 💾
     const updatedVenture = await prisma.venture.update({
       where: { id: ventureId },
       data: {
         status: isNoGo ? 'PIVOTED' : 'OPERATIONAL',
-        aiStrategy: aiResponse
+        aiStrategy: finalStrategy,
+        // Se l'AI ha generato una nuova automazione per il pivot, sovrascriviamo la vecchia!
+        ...(newAutomation && { dailyAutomation: newAutomation }) 
       }
     });
 
     res.status(200).json({
       message: isNoGo ? 'Strategia di PIVOT generata per salvare la venture.' : 'Piano Operativo generato con successo.',
-      aiStrategy: aiResponse,
+      aiStrategy: finalStrategy,
       data: updatedVenture
     });
 
