@@ -60,6 +60,7 @@ model Venture {
   status        VentureStatus   @default(IDEATION)
   metrics       Json?           // Per salvare KPI futuri
   aiStrategy    String?
+  dailyAutomation String?         // 🔥 MAGIA NERA: L'automazione giornaliera proposta dall'AI
   tasks         Task[]
   chatMessages ChatMessage[]
   

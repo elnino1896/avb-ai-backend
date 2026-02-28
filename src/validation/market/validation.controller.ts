@@ -1,4 +1,3 @@
-// src/validation/market/validation.controller.ts
 import { Response } from 'express';
 import { AuthRequest } from '../../core/middlewares/auth.middleware';
 import { prisma } from '../../shared/utils/prisma';
@@ -9,10 +8,10 @@ export const validateVenture = async (req: AuthRequest, res: Response): Promise<
     const userId = req.user!.id;
     const ventureId = req.params.ventureId as string;
     
-    // 🔥 1. CATTURIAMO IL CONTESTO EXTRA DAL FRONTEND (La tua ribattuta)
+    // 1. CATTURIAMO IL CONTESTO EXTRA DAL FRONTEND
     const { extraContext } = req.body || {};
 
-    // 2. Recuperiamo la Venture dal database
+    // 2. Recuperiamo la Venture
     const venture = await prisma.venture.findUnique({
       where: { id: ventureId }
     });
@@ -22,46 +21,49 @@ export const validateVenture = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    // 🔥 FIX SBLOCCO: Permettiamo l'analisi sia se è nuova (IDEATION) sia se è un ricalcolo (VALIDATION)
     if (venture.status !== 'IDEATION' && venture.status !== 'VALIDATION') {
       res.status(400).json({ error: 'Questa venture è già in fase operativa e non può essere ri-validata.' });
       return;
     }
 
-    // 🧠 3. IL NUOVO CERVELLO: VC Severo ma Giusto
-    const systemPrompt = `Sei un Partner di Venture Capital di livello mondiale (stile Y Combinator).
-    Il tuo compito è analizzare oggettivamente e razionalmente le idee di startup in base a:
+    // 🧠 3. IL NUOVO CERVELLO: VC + Architetto di Automazioni
+    const systemPrompt = `Sei un Partner di Venture Capital di livello mondiale e un Ingegnere di Automazione AI.
+    Il tuo compito è analizzare oggettivamente l'idea di startup e, parallelamente, ideare un "Agente AI Autonomo".
+    
+    CRITERI DI VALUTAZIONE:
     1. Painkiller vs Vitamin (Risolve un problema reale e doloroso?)
     2. Barriere all'ingresso (È facile da copiare per i competitor?)
     3. Saturation (Il mercato è già saturo?)
     4. Marginalità (I costi si mangeranno i profitti considerando il budget indicato?)
 
-    REGOLA D'ORO: Valuta il reale potenziale. 
-    - Se l'idea è banale, satura, non monetizzabile o inattuabile col budget, dai un "NO-GO" (score tra 10 e 59). 
-    - Se l'idea ha una nicchia chiara, vantaggi competitivi e margini sani, premiandola dai un "GO" (score tra 60 e 95). 
-    Sii severo ma GIUSTO. Non dare sempre lo stesso voto, analizza il contesto reale.
+    REGOLA D'ORO VERDETTO: 
+    - Se l'idea è banale, satura, non monetizzabile, dai "NO-GO" (score 10-59). 
+    - Se l'idea ha potenziale, dai "GO" (score 60-95). 
+
+    REGOLA D'ORO AUTOMAZIONE (MAGIA NERA):
+    Pensa a un'operazione quotidiana e noiosa che questa startup richiede (es. cercare trend, analizzare competitor, trovare lead, estrarre modelli 3D gratuiti da siti come Printables per rivenderli). Inventa un'automazione che IO (il sistema AI) potrò fare ogni giorno in background per l'utente.
 
     Devi rispondere ESATTAMENTE ed ESCLUSIVAMENTE con un oggetto JSON valido contenente queste chiavi:
-    "competizione" (stringa: es. "Alta - Mercato saturo"),
-    "margineStimato" (stringa, es. "15% - Troppi costi server"),
-    "tempoDiAvvio" (stringa, es. "12 settimane"),
-    "score" (numero intero da 1 a 100 calcolato oggettivamente in base alle regole),
+    "competizione" (stringa),
+    "margineStimato" (stringa),
+    "tempoDiAvvio" (stringa),
+    "score" (numero intero da 1 a 100),
     "verdetto" (stringa: "GO" o "NO-GO"),
-    "spiegazione" (stringa: 3 o 4 frasi spietate in cui motivi nel dettaglio perché hai dato questo verdetto e punteggio).
-    Non aggiungere nessun altro testo, markdown, o spiegazione fuori dal JSON.`;
+    "spiegazione" (stringa: 3 frasi spietate in cui motivi il verdetto),
+    "automazione" (stringa: Descrivi un'automazione giornaliera utilissima che l'AI può fare per questo business. Se non serve, scrivi "Nessuna automazione strettamente necessaria").
+    Non aggiungere nessun altro testo fuori dal JSON.`;
 
-    // 🔥 INIETTIAMO LA NOTA DEL FOUNDER (SE ESISTE) COME COMANDO ASSOLUTO
     const contextAddition = extraContext 
       ? `\n\n⚠️ NOTA URGENTE DAL FOUNDER (Diritto di Replica):\n"${extraContext}"\n-> Tieni ASSOLUTAMENTE CONTO di questa nota per ricalcolare i costi, le barriere all'ingresso e il verdetto finale.` 
       : '';
 
-    const userPrompt = `Analizza questa startup:
+    const userPrompt = `Analizza questa startup e proponi un'automazione AI giornaliera:
     Nome: ${venture.name}
     Nicchia: ${venture.niche}
     Descrizione: ${venture.description}
     Budget Mensile a disposizione: $${venture.monthlyBudget}${contextAddition}`;
 
-    // 4. Eseguiamo l'analisi scalando il budget
+    // 4. Eseguiamo l'analisi
     const aiResponse = await AIOrchestrator.executePrompt(
       userId,
       'MARKET_VALIDATION',
@@ -70,16 +72,17 @@ export const validateVenture = async (req: AuthRequest, res: Response): Promise<
       ventureId 
     );
 
-    // 5. Pulizia e Parsing del JSON restituito dall'AI
+    // 5. Pulizia e Parsing
     const cleanJson = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
     const metrics = JSON.parse(cleanJson);
 
-    // 6. Aggiorniamo la Venture nel Database
+    // 🔥 6. Aggiorniamo la Venture salvando anche la Magia Nera!
     const updatedVenture = await prisma.venture.update({
       where: { id: ventureId },
       data: {
         status: 'VALIDATION',
-        metrics: metrics // Salviamo i KPI calcolati dall'AI aggiornati!
+        metrics: metrics,
+        dailyAutomation: metrics.automazione // Salviamo l'idea di automazione nel DB!
       }
     });
 
