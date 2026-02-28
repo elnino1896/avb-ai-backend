@@ -4,77 +4,84 @@ import { AIOrchestrator } from '../ai/engine/orchestrator';
 
 export class AutomationService {
   
-  // Questa funzione verrà chiamata dal Cron Job ogni giorno
   static async runDailyAutomations() {
-    console.log('🤖 [CRON] Inizio routine di Automazione Giornaliera...');
+    console.log('🤖 [CRON-HEARTBEAT] Battito cardiaco ricevuto. Controllo le schedulazioni...');
 
     try {
-      // 1. TROVIAMO L'UTENTE AUTORIZZATO (Il recinto di sicurezza)
       const targetUser = await prisma.user.findUnique({
-        where: { email: 'founder@avb-ai.com' } // 🔥 BLOCCO DI SICUREZZA
+        where: { email: 'founder@avb-ai.com' } 
       });
 
-      if (!targetUser) {
-        console.log('❌ [CRON] Utente founder@avb-ai.com non trovato. Abortisco.');
-        return { success: false, message: 'Utente test non trovato' };
-      }
+      if (!targetUser) return { success: false, message: 'Utente test non trovato' };
 
-      // 2. RECUPERIAMO LE VENTURE DA AUTOMATIZZARE
-      // Cerchiamo le venture dell'utente che hanno un'automazione definita
-      const venturesToAutomate = await prisma.venture.findMany({
+      // Recuperiamo TUTTE le venture attive con un'automazione
+      const ventures = await prisma.venture.findMany({
         where: {
           userId: targetUser.id,
           dailyAutomation: { not: null },
-          status: 'OPERATIONAL' // Esegue solo se la startup è attiva nella War Room!
+          status: 'OPERATIONAL'
         }
       });
 
-      console.log(`📡 [CRON] Trovate ${venturesToAutomate.length} venture da automatizzare per il Founder.`);
+      let executedCount = 0;
 
-      // 3. ESEGUIAMO IL TASK PER OGNI VENTURE
-      for (const venture of venturesToAutomate) {
-        console.log(`⚙️ Esecuzione automazione per: ${venture.name}...`);
+      for (const venture of ventures) {
+        if (!venture.automationTime || !venture.automationTimezone) continue;
 
-        // Il prompt per il nostro Agente "Ricercatore"
-        const systemPrompt = `Sei l'Agente AI Autonomo (CTO Co-Pilot) di una startup chiamata "${venture.name}".
-        La tua nicchia è: "${venture.niche}".
-        Il tuo compito assegnato per oggi è eseguire questa automazione specifica: 
-        "${venture.dailyAutomation}"
-        
-        AGISCI ORA: Genera un report realistico come se avessi appena navigato sul web. 
-        Trova o simula 3 risultati pratici e specifici (es. se ti si chiede di cercare modelli 3D, inventa/trova 3 nomi di modelli molto plausibili e spiega perché sono ottimi da vendere).
-        
-        Rispondi DIRETTAMENTE con il messaggio che invierai all'utente, usa un tono professionale ma amichevole, usa emoji e formatta il testo in Markdown. NON usare formati JSON, scrivi come se stessi chattando. Inizia con un saluto tipo "Buongiorno CEO! Ho appena completato la scansione giornaliera..."`;
-
-        const userPrompt = `Esegui il task di automazione e dammi i risultati.`;
-
-        // L'AI esegue il lavoro
-        const aiReport = await AIOrchestrator.executePrompt(
-          targetUser.id,
-          'DAILY_AUTOMATION',
-          systemPrompt,
-          userPrompt,
-          venture.id
-        );
-
-        // 4. INIEZIONE NELLA WAR ROOM (Magia Nera 🪄)
-        // Salviamo il report come un normale messaggio di chat da parte dell'AI
-        await prisma.chatMessage.create({
-          data: {
-            ventureId: venture.id,
-            role: 'ai',
-            content: `**[🤖 AUTOMAZIONE GIORNALIERA COMPLETATA]**\n\n${aiReport}`
-          }
+        // 1. CALCOLO DELL'ORARIO LOCALE DELLA STARTUP
+        // Che ore sono ADESSO nel fuso orario richiesto da questa startup?
+        const formatter = new Intl.DateTimeFormat('en-US', {
+          timeZone: venture.automationTimezone,
+          hour: '2-digit',
+          hour12: false
         });
+        
+        const currentHourInTargetZone = formatter.format(new Date()); // Es: "15" o "09"
+        const targetHour = venture.automationTime.split(':')[0]; // Prende "15" da "15:00"
 
-        console.log(`✅ Messaggio iniettato nella War Room di ${venture.name}!`);
+        // 2. CONTROLLO DI FREQUENZA E ORARIO
+        const isTimeMatch = currentHourInTargetZone === targetHour;
+        
+        // Evitiamo che giri due volte nella stessa ora/giorno (Cooldown di sicurezza)
+        let isCooldownOk = true;
+        if (venture.lastAutomationRun) {
+          const hoursSinceLastRun = (new Date().getTime() - venture.lastAutomationRun.getTime()) / (1000 * 60 * 60);
+          if (hoursSinceLastRun < 20) isCooldownOk = false; // Deve passare almeno quasi un giorno
+        }
+
+        if (isTimeMatch && isCooldownOk) {
+          console.log(`⏰ [MATCH] Eseguo automazione per ${venture.name} (Fuso: ${venture.automationTimezone}, Ora: ${venture.automationTime})`);
+
+          const systemPrompt = `Sei il CTO Co-Pilot di "${venture.name}". Nicchia: "${venture.niche}".
+          Task: "${venture.dailyAutomation}"
+          Simula/Esegui la ricerca e scrivi un report professionale e amichevole per il CEO da postare nella War Room. Inizia con un saluto.`;
+
+          const aiReport = await AIOrchestrator.executePrompt(
+            targetUser.id, 'DAILY_AUTOMATION', systemPrompt, 'Esegui il task', venture.id
+          );
+
+          // Iniettiamo nella War Room
+          await prisma.chatMessage.create({
+            data: { ventureId: venture.id, role: 'ai', content: `**[🤖 AUTOMAZIONE SCHEDULATA COMPLETATA]**\n\n${aiReport}` }
+          });
+
+          // Aggiorniamo l'orario dell'ultima esecuzione nel database!
+          await prisma.venture.update({
+            where: { id: venture.id },
+            data: { lastAutomationRun: new Date() }
+          });
+
+          executedCount++;
+        } else {
+          console.log(`💤 [SKIP] ${venture.name} dorme. (Ora target: ${targetHour}, Ora locale lì: ${currentHourInTargetZone})`);
+        }
       }
 
-      console.log('🏁 [CRON] Routine completata con successo.');
-      return { success: true, message: `Eseguite automazioni per ${venturesToAutomate.length} venture.` };
+      console.log(`🏁 [CRON-HEARTBEAT] Fine. Eseguite ${executedCount} automazioni.`);
+      return { success: true, executed: executedCount };
 
     } catch (error) {
-      console.error('❌ [CRON] Errore critico durante le automazioni:', error);
+      console.error('❌ [CRON] Errore critico:', error);
       return { success: false, error: 'Errore interno' };
     }
   }

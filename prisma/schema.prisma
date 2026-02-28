@@ -60,7 +60,12 @@ model Venture {
   status        VentureStatus   @default(IDEATION)
   metrics       Json?           // Per salvare KPI futuri
   aiStrategy    String?
-  dailyAutomation String?         // 🔥 MAGIA NERA: L'automazione giornaliera proposta dall'AI
+  dailyAutomation      String?   @db.Text // Descrizione dell'automazione
+  // 🔥 NUOVI CAMPI PER LO SCHEDULER:
+  automationFrequency  String?   // "DAILY", "WEEKLY", ecc.
+  automationTime       String?   // Es: "09:00", "15:00"
+  automationTimezone   String?   // Es: "Europe/Rome", "America/New_York"
+  lastAutomationRun    DateTime? // Quando è stata eseguita l'ultima volta?
   tasks         Task[]
   chatMessages ChatMessage[]
   

@@ -26,32 +26,37 @@ export const validateVenture = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    // 🧠 3. IL NUOVO CERVELLO: VC + Architetto di Automazioni Severo
-    const systemPrompt = `Sei un Partner di Venture Capital di livello mondiale e un Ingegnere di Automazione AI.
-    Il tuo compito è analizzare oggettivamente l'idea di startup e, parallelamente, ideare un "Agente AI Autonomo".
+    // 🧠 3. IL NUOVO CERVELLO: VC + Architetto + Project Manager
+    const systemPrompt = `Sei un Partner di Venture Capital e un Architetto di Automazioni AI.
     
     CRITERI DI VALUTAZIONE:
-    1. Painkiller vs Vitamin (Risolve un problema reale e doloroso?)
-    2. Barriere all'ingresso (È facile da copiare per i competitor?)
-    3. Saturation (Il mercato è già saturo?)
-    4. Marginalità (I costi si mangeranno i profitti considerando il budget indicato?)
+    1. Painkiller vs Vitamin
+    2. Barriere all'ingresso
+    3. Saturation
+    4. Marginalità
 
     REGOLA D'ORO VERDETTO: 
-    - Se l'idea è banale, satura, non monetizzabile, dai "NO-GO" (score 10-59). 
-    - Se l'idea ha potenziale, dai "GO" (score 60-95). 
+    - Banale/Satura: "NO-GO" (score 10-59). 
+    - Potenziale reale: "GO" (score 60-95). 
 
     REGOLA D'ORO AUTOMAZIONE (MAGIA NERA):
-    Pensa a un'operazione quotidiana e noiosa di RICERCA ESTERNA o GROWTH HACKING che l'AI può fare in background per aiutare il Founder (es. raschiare Reddit/LinkedIn per trovare clienti, monitorare i prezzi dei competitor, estrarre modelli 3D gratuiti da Printables). NON proporre funzioni interne al prodotto (es. non proporre di analizzare i dati degli utenti o di creare report per l'app finale, l'app non esiste ancora!). L'automazione deve servire al CEO per validare o far crescere il business.
+    Proponi un'operazione di RICERCA ESTERNA o GROWTH HACKING (es. raschiare Reddit, monitorare competitor). 
+    Inoltre, devi definire la SCHEDULAZIONE PERFETTA per questa startup. Se vende a Wall Street, l'orario migliore è le 15:00 (America/New_York). Se è un report settimanale, la frequenza è WEEKLY.
 
-    Devi rispondere ESATTAMENTE ed ESCLUSIVAMENTE con un oggetto JSON valido contenente queste chiavi:
-    "competizione" (stringa),
-    "margineStimato" (stringa),
-    "tempoDiAvvio" (stringa),
-    "score" (numero intero da 1 a 100),
-    "verdetto" (stringa: "GO" o "NO-GO"),
-    "spiegazione" (stringa: 3 frasi spietate in cui motivi il verdetto),
-    "automazione" (stringa: Descrivi un'automazione di ricerca o scraping giornaliera. Sii specifico, indica siti reali. Se non serve, scrivi "Nessuna automazione strettamente necessaria").
-    Non aggiungere nessun altro testo fuori dal JSON.`;
+    Devi rispondere ESATTAMENTE con un oggetto JSON valido:
+    "competizione": "...",
+    "margineStimato": "...",
+    "tempoDiAvvio": "...",
+    "score": 85,
+    "verdetto": "GO",
+    "spiegazione": "...",
+    "automazione": {
+      "descrizione": "Spiega l'automazione di ricerca o scraping.",
+      "frequenza": "DAILY oppure WEEKLY",
+      "orario": "HH:00 (es. 09:00, 15:00, 23:00)",
+      "fusoOrario": "Un fuso orario IANA valido (es. Europe/Rome, America/New_York, Asia/Tokyo)"
+    }
+    Non aggiungere testo fuori dal JSON.`;
 
     const contextAddition = extraContext 
       ? `\n\n⚠️ NOTA URGENTE DAL FOUNDER (Diritto di Replica):\n"${extraContext}"\n-> Tieni ASSOLUTAMENTE CONTO di questa nota per ricalcolare i costi, le barriere all'ingresso e il verdetto finale.` 
@@ -76,13 +81,16 @@ export const validateVenture = async (req: AuthRequest, res: Response): Promise<
     const cleanJson = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
     const metrics = JSON.parse(cleanJson);
 
-    // 🔥 6. Aggiorniamo la Venture salvando anche la Magia Nera!
+    // 🔥 6. Aggiorniamo la Venture salvando TUTTI i parametri di schedulazione!
     const updatedVenture = await prisma.venture.update({
       where: { id: ventureId },
       data: {
         status: 'VALIDATION',
         metrics: metrics,
-        dailyAutomation: metrics.automazione // Salviamo l'idea di automazione nel DB!
+        dailyAutomation: metrics.automazione?.descrizione,
+        automationFrequency: metrics.automazione?.frequenza,
+        automationTime: metrics.automazione?.orario,
+        automationTimezone: metrics.automazione?.fusoOrario
       }
     });
 
