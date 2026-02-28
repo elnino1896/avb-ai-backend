@@ -15,6 +15,7 @@ import strategyRoutes from './portfolio/strategy/strategy.routes';
 import billingRoutes from './billing/billing.routes';
 import validationRoutes from './validation/market/validation.routes';
 import executionRoutes from './execution/execution.routes';
+import automationRoutes from './automation/automation.routes';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -35,6 +36,8 @@ app.use('/api/v1/validation/market', validationRoutes);
 app.use('/api/v1/strategy', strategyRoutes);
 
 app.use('/api/v1/execution', executionRoutes);
+// LA ROTTA DEI CRON JOBS (MAGIA NERA)
+app.use('/api/v1/automation', automationRoutes);
 
 // Health Check
 app.get('/api/health', (req: Request, res: Response) => {
@@ -45,4 +48,5 @@ app.get('/api/health', (req: Request, res: Response) => {
 app.listen(PORT, () => {
   console.log(`\n🚀 [AVB-AI] Server operativo sulla porta ${PORT}`);
 });
+
 
