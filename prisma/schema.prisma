@@ -61,6 +61,7 @@ model Venture {
   metrics       Json?           // Per salvare KPI futuri
   aiStrategy    String?
   dailyAutomation      String?   @db.Text // Descrizione dell'automazione
+  isExistingBusiness Boolean @default(false) // 🔥 FLAG AZIENDA ESISTENTE
   // 🔥 NUOVI CAMPI PER LO SCHEDULER:
   automationFrequency  String?   // "DAILY", "WEEKLY", ecc.
   automationTime       String?   // Es: "09:00", "15:00"

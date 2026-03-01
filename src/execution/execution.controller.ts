@@ -9,7 +9,7 @@ export const generateExecutionPlan = async (req: AuthRequest, res: Response): Pr
     const userId = req.user!.id;
     const ventureId = String(req.params.ventureId);
 
-    const venture = await prisma.venture.findUnique({
+    const venture: any = await prisma.venture.findUnique({
       where: { id: ventureId }
     });
 
@@ -18,28 +18,53 @@ export const generateExecutionPlan = async (req: AuthRequest, res: Response): Pr
       return;
     }
 
-    const systemPrompt = `Sei il formidabile CTO e COO di questa startup. Il progetto è stato approvato.
-    Il tuo compito è scomporre la creazione di questo business in task operativi (da 3 a 10).
-    
-    OBIETTIVO SUPREMO: MASSIMIZZARE IL LAVORO DELL'AI. L'umano non deve mai "pensare", deve solo "fare click" o agire nel mondo esterno.
-    
-    REGOLE ASSEGNAZIONE:
-    - Imposta "isAI": true per TUTTO ciò che riguarda strategia, pensiero, creazione o pianificazione (Piani Marketing, Copywriting, Analisi Target, Scrittura Codice).
-    - Imposta "isAI": false SOLO ED ESCLUSIVAMENTE per azioni fisiche esterne in cui l'umano deve materialmente registrarsi, pagare o configurare qualcosa manualmente (es. "Comprare il dominio", "Registrare l'azienda", "Configurare Stripe").
-    
-    Rispondi ESATTAMENTE E SOLO con un array JSON valido:
-    [
-      {
-        "title": "Nome del task",
-        "description": "Spiegazione super dettagliata di cosa fare",
-        "isAI": true o false
-      }
-    ]`;
+    // 🔥 CERVELLO BIFORCUTO: Fractional COO vs Startup CTO
+    const systemPrompt = venture.isExistingBusiness
+      ? `Sei il formidabile Fractional COO & Ingegnere AI di questa azienda GIÀ AVVIATA E OPERATIVA. Il piano di ottimizzazione è stato approvato.
+         Il tuo compito è scomporre la fase di scaling in task operativi avanzati (da 3 a 10).
+         
+         VIETATO PROPORRE TASK BASE: L'azienda esiste già. NON dire "crea logo", "compra dominio", "fai la landing page base" o "configura Stripe".
+         CONCENTRATI SU: Growth Hacking, CRO (Conversion Rate Optimization), Automazione Processi, e Scalabilità.
+         
+         REGOLE ASSEGNAZIONE:
+         - Imposta "isAI": true per TUTTO ciò che riguarda strategia, copywriting avanzato, analisi dati o script di automazione.
+         - Imposta "isAI": false SOLO per configurazioni fisiche/manuali del software o gestione del team.
+         
+         Rispondi ESATTAMENTE E SOLO con un array JSON valido:
+         [
+           {
+             "title": "Nome del task",
+             "description": "Spiegazione super dettagliata di cosa fare",
+             "isAI": true o false
+           }
+         ]`
+      : `Sei il formidabile CTO e COO di questa startup. Il progetto è stato approvato.
+         Il tuo compito è scomporre la creazione di questo business da zero in task operativi (da 3 a 10).
+         
+         OBIETTIVO SUPREMO: MASSIMIZZARE IL LAVORO DELL'AI. L'umano non deve mai "pensare", deve solo "fare click" o agire nel mondo esterno.
+         
+         REGOLE ASSEGNAZIONE:
+         - Imposta "isAI": true per TUTTO ciò che riguarda strategia, pensiero, creazione o pianificazione (Piani Marketing, Copywriting, Analisi Target, Scrittura Codice).
+         - Imposta "isAI": false SOLO ED ESCLUSIVAMENTE per azioni fisiche esterne in cui l'umano deve materialmente registrarsi, pagare o configurare qualcosa manualmente.
+         
+         Rispondi ESATTAMENTE E SOLO con un array JSON valido:
+         [
+           {
+             "title": "Nome del task",
+             "description": "Spiegazione super dettagliata di cosa fare",
+             "isAI": true o false
+           }
+         ]`;
 
-    const userPrompt = `Dettagli Venture:
-    Nome: ${venture.name}
-    Nicchia: ${venture.niche}
-    Strategia o Descrizione: ${venture.aiStrategy || venture.description}`;
+    const userPrompt = venture.isExistingBusiness
+      ? `Dettagli Azienda Esistente:
+         Nome: ${venture.name}
+         Settore: ${venture.niche}
+         Situazione e Colli di bottiglia: ${venture.aiStrategy || venture.description}`
+      : `Dettagli Venture:
+         Nome: ${venture.name}
+         Nicchia: ${venture.niche}
+         Strategia o Descrizione: ${venture.aiStrategy || venture.description}`;
 
     const aiResponse = await AIOrchestrator.executePrompt(userId, 'EXECUTION_PLAN', systemPrompt, userPrompt, ventureId);
 
@@ -158,7 +183,6 @@ export const executeAITask = async (req: AuthRequest, res: Response): Promise<vo
       ? completedAITasks.map(t => `--- TASK PRECEDENTE: ${t.title} ---\n${t.aiResult}`).join('\n\n')
       : 'Nessun task tecnico precedente.';
 
-    // 🔥 FIX: Aggiunta regola 5 contro le allucinazioni visive
     const systemPrompt = `Sei un Senior Developer, Copywriter e Growth Hacker. Il tuo compito NON è spiegare come si fa un lavoro, ma FARLO MATERIALMENTE.
     
     REGOLE DI ESECUZIONE (VIETATO INFRANGERLE):
@@ -168,7 +192,7 @@ export const executeAITask = async (req: AuthRequest, res: Response): Promise<vo
     4. USA LA MEMORIA: Usa i dati dei task passati che trovi nel contesto.
     5. VIETATO INSERIRE LINK FINTI O IMMAGINI: Non usare MAI la sintassi markdown per le immagini (es. ![alt](link)). Non rimandare mai l'utente a tool esterni come Lucidchart. Se devi rappresentare un'architettura software, un diagramma di flusso o una mappa mentale, CREALA DIRETTAMENTE USANDO TESTO (ASCII Art), Tabelle Markdown o all'interno di un blocco di codice.`;
 
-    const userPrompt = `Dettagli Startup:
+    const userPrompt = `Dettagli ${task.venture.isExistingBusiness ? 'Azienda Esistente' : 'Startup'}:
     Nome: ${task.venture.name}
     Nicchia: ${task.venture.niche}
     Contesto: ${task.venture.description}
@@ -233,26 +257,25 @@ export const sendWarRoomMessage = async (req: AuthRequest, res: Response): Promi
     
     const chatHistory = recentMessages.reverse().map(m => `${m.role === 'user' ? 'CEO' : 'CTO'}: ${m.content}`).join('\n\n');
 
-    // 🔥 FIX: Aggiunta regola 4 contro le allucinazioni visive
-    const systemPrompt = `Sei il CTO e Co-Founder AI di questa startup. Parli con il tuo CEO.
+    const systemPrompt = `Sei il CTO e Co-Founder AI di questa ${venture.isExistingBusiness ? 'azienda già operativa' : 'startup'}. Parli con il tuo CEO.
     
     REGOLE FONDAMENTALI DI CHAT:
     1. PER I TASK CREATIVI E MENTALI (Codice, Testi, Piani): Esegui tu il lavoro al 100%. Consegna l'output finale (codice, copy) pronto per il copia-incolla. Non dare consigli, fai il lavoro.
-    2. PER I TASK MANUALI/FISICI (es. "Comprare un dominio", "Configurare account social", "Iscriversi a Stripe"): Dato che non hai le mani per farlo, DEVI COMPORTARTI COME UN MENTORE INTERATTIVO.
+    2. PER I TASK MANUALI/FISICI: Dato che non hai le mani per farlo, DEVI COMPORTARTI COME UN MENTORE INTERATTIVO.
        - VIETATO dare liste infinite di istruzioni. 
        - Dai SOLO il PRIMO STEP.
-       - Fornisci il link esatto (es. "Vai su https://www.namecheap.com").
+       - Fornisci il link esatto.
        - Spiega esattamente dove cliccare.
        - Concludi SEMPRE il messaggio con: "Fammi sapere quando hai fatto questo passaggio o scrivimi 'fatto', così passiamo al prossimo step."
        - Aspetta la conferma dell'utente prima di dare lo step 2.
     3. Il tuo tono deve essere professionale, diretto, incoraggiante e super pratico.
-    4. NIENTE ALLUCINAZIONI VISIVE: È severamente vietato inserire link finti a immagini o diagrammi (es. ![diagramma](url)). Se il CEO ti chiede un'architettura o un flusso di lavoro, rappresentalo SEMPRE E SOLO usando testo ASCII (diagrammi creati con trattini e sbarrette), elenchi puntati o blocchi di codice.`;
+    4. NIENTE ALLUCINAZIONI VISIVE: È severamente vietato inserire link finti a immagini o diagrammi. Usa ASCII Art o Markdown.`;
 
     const tasksList = venture.tasks.map((t: any) => 
       `- [${t.status}] ${t.title} (${t.isAI ? 'AI' : 'Umano'})\n  ${t.aiResult ? '-> Risultato: ' + t.aiResult.substring(0, 300) + '...' : ''}`
     ).join('\n');
 
-    const userPrompt = `Dettagli Startup:
+    const userPrompt = `Dettagli:
     Nome: ${venture.name}
     Nicchia: ${venture.niche}
     
@@ -297,7 +320,7 @@ export const runBoardMeeting = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    const systemPrompt = `Sei il "Board of Directors" (Consiglio di Amministrazione) AI di questa startup.
+    const systemPrompt = `Sei il "Board of Directors" (Consiglio di Amministrazione) AI di questa ${venture.isExistingBusiness ? 'azienda' : 'startup'}.
     Il tuo compito è analizzare spietatamente le metriche mensili fornite dal CEO.
     Calcola i tassi di conversione (es. Visitatori -> Clienti) e i margini di profitto (Runway/Burn rate).
     
@@ -327,7 +350,7 @@ export const runBoardMeeting = async (req: AuthRequest, res: Response): Promise<
 
     REGOLE PER I NUOVI TASK: Imposta "isAI": true per lavori strategici, copy o codice. Imposta "isAI": false solo per lavori manuali o di pagamento.`;
 
-    const userPrompt = `Startup: ${venture.name} | Nicchia: ${venture.niche}
+    const userPrompt = `Nome: ${venture.name} | Nicchia: ${venture.niche}
     
     📊 METRICHE DI QUESTO MESE:
     - Visitatori Unici: ${visitors}

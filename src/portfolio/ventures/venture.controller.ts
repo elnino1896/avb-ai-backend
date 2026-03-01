@@ -29,14 +29,14 @@ export const generateVentures = async (req: AuthRequest, res: Response): Promise
 export const createVenture = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user!.id;
-    const { name, niche, description, monthlyBudget, riskLevel } = req.body;
+    // 🔥 Aggiunto isExistingBusiness
+    const { name, niche, description, monthlyBudget, riskLevel, isExistingBusiness } = req.body;
 
     if (!name || !niche || !description) {
       res.status(400).json({ error: 'Nome, nicchia e descrizione sono obbligatori.' });
       return;
     }
 
-    // Creiamo fisicamente la Venture nel database
     const newVenture = await prisma.venture.create({
       data: {
         userId,
@@ -45,18 +45,14 @@ export const createVenture = async (req: AuthRequest, res: Response): Promise<vo
         description,
         monthlyBudget: monthlyBudget || 0.0,
         riskLevel: riskLevel || 'MEDIUM',
-        status: 'IDEATION' // Stato iniziale del ciclo di vita
+        status: 'IDEATION',
+        isExistingBusiness: isExistingBusiness || false // 🔥 Salviamo il flag!
       }
     });
 
-    res.status(201).json({
-      message: 'Venture salvata con successo nel Portfolio.',
-      data: newVenture
-    });
-
+    res.status(201).json({ message: 'Salvato nel Portfolio.', data: newVenture });
   } catch (error) {
-    console.error('[Create Venture Error]:', error);
-    res.status(500).json({ error: 'Errore durante il salvataggio della venture.' });
+    res.status(500).json({ error: 'Errore durante il salvataggio.' });
   }
 };
 
