@@ -411,3 +411,88 @@ export const runBoardMeeting = async (req: AuthRequest, res: Response): Promise<
     }
   }
 };
+
+export const recalibrateVenture = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.id;
+    const ventureId = String(req.params.ventureId);
+    const { newDescription } = req.body;
+
+    if (!newDescription) {
+      res.status(400).json({ error: 'La nuova descrizione è obbligatoria.' });
+      return;
+    }
+
+    const venture: any = await prisma.venture.findUnique({ where: { id: ventureId } });
+
+    if (!venture || venture.userId !== userId) {
+      res.status(404).json({ error: 'Venture non trovata.' });
+      return;
+    }
+
+    // 1. Aggiorniamo la descrizione nel database
+    await prisma.venture.update({
+      where: { id: ventureId },
+      data: { 
+        description: newDescription,
+        aiStrategy: null // Puliamo l'eventuale strategia di pivot per non fare confusione
+      }
+    });
+
+    // 2. Cancelliamo i task "Da Fare" (mantenendo intatti quelli già Completati)
+    await prisma.task.deleteMany({
+      where: { ventureId: ventureId, status: 'TODO' }
+    });
+
+    // 3. Richiamiamo l'Oracolo con le NUOVE direttive
+    const systemPrompt = venture.isExistingBusiness
+      ? `Sei il formidabile Fractional COO & Ingegnere AI di questa azienda GIÀ AVVIATA. Il CEO ha appena CORRETTO IL TIRO e ti ha fornito nuove direttive essenziali.
+         Il tuo compito è scomporre la fase di scaling in task operativi avanzati (da 3 a 10) BASANDOTI SULLE NUOVE DIRETTIVE.
+         
+         VIETATO PROPORRE TASK BASE: L'azienda esiste già.
+         
+         REGOLE ASSEGNAZIONE:
+         - Imposta "isAI": true per TUTTO ciò che riguarda strategia, copy, analisi o codice.
+         - Imposta "isAI": false SOLO per configurazioni fisiche/manuali.
+         
+         Rispondi ESATTAMENTE E SOLO con un array JSON valido:
+         [ { "title": "...", "description": "...", "isAI": true } ]`
+      : `Sei il formidabile CTO e COO di questa startup. Il CEO ha appena CORRETTO IL TIRO e ti ha fornito nuove direttive essenziali.
+         Il tuo compito è scomporre la creazione di questo business in task operativi (da 3 a 10).
+         
+         OBIETTIVO SUPREMO: MASSIMIZZARE IL LAVORO DELL'AI.
+         
+         Rispondi ESATTAMENTE E SOLO con un array JSON valido:
+         [ { "title": "...", "description": "...", "isAI": true } ]`;
+
+    const userPrompt = `Dettagli aggiornati:
+    Nome: ${venture.name}
+    Nicchia: ${venture.niche}
+    NUOVA SITUAZIONE / NUOVE DIRETTIVE DEL CEO: ${newDescription}`;
+
+    const aiResponse = await AIOrchestrator.executePrompt(userId, 'EXECUTION_PLAN', systemPrompt, userPrompt, ventureId);
+    
+    const cleanJson = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+    const tasksData = JSON.parse(cleanJson);
+
+    const createdTasks = [];
+    for (const t of tasksData) {
+      const newTask = await prisma.task.create({
+        data: {
+          ventureId,
+          title: t.title,
+          description: t.description,
+          isAI: t.isAI,
+          status: 'TODO'
+        }
+      });
+      createdTasks.push(newTask);
+    }
+
+    res.status(200).json({ message: 'Ricalibrazione completata!', data: createdTasks });
+
+  } catch (error: any) {
+    console.error('[Recalibration Error]:', error);
+    res.status(500).json({ error: 'Errore durante la ricalibrazione.' });
+  }
+};
