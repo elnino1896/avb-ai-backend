@@ -430,66 +430,113 @@ export const recalibrateVenture = async (req: AuthRequest, res: Response): Promi
       return;
     }
 
-    // 1. Aggiorniamo la descrizione nel database
-    await prisma.venture.update({
-      where: { id: ventureId },
-      data: { 
-        description: newDescription,
-        aiStrategy: null // Puliamo l'eventuale strategia di pivot per non fare confusione
-      }
-    });
-
-    // 2. Cancelliamo i task "Da Fare" (mantenendo intatti quelli già Completati)
+    // 1. Cancelliamo i task "Da Fare" (mantenendo intatti quelli già Completati)
     await prisma.task.deleteMany({
       where: { ventureId: ventureId, status: 'TODO' }
     });
 
-    // 3. Richiamiamo l'Oracolo con le NUOVE direttive
+    // 2. Richiamiamo l'Oracolo passandogli anche la VECCHIA automazione e il "Permesso di Eliminare"
     const systemPrompt = venture.isExistingBusiness
       ? `Sei il formidabile Fractional COO & Ingegnere AI di questa azienda GIÀ AVVIATA. Il CEO ha appena CORRETTO IL TIRO e ti ha fornito nuove direttive essenziali.
-         Il tuo compito è scomporre la fase di scaling in task operativi avanzati (da 3 a 10) BASANDOTI SULLE NUOVE DIRETTIVE.
+         Il tuo compito è:
+         1. Scomporre la fase di scaling in task operativi (da 3 a 10) basandoti SULLE NUOVE DIRETTIVE.
+         2. Valutare l'AUTOMAZIONE ATTUALE: 
+            - Se va ancora bene, confermala identica.
+            - Se è sbagliata, inventane una nuova.
+            - Se prima non c'era ma ora serve, creala da zero.
+            - Se le nuove direttive rendono INUTILE qualsiasi automazione, imposta l'intero campo "automazione" a null.
          
          VIETATO PROPORRE TASK BASE: L'azienda esiste già.
          
-         REGOLE ASSEGNAZIONE:
+         REGOLE ASSEGNAZIONE TASK:
          - Imposta "isAI": true per TUTTO ciò che riguarda strategia, copy, analisi o codice.
          - Imposta "isAI": false SOLO per configurazioni fisiche/manuali.
          
-         Rispondi ESATTAMENTE E SOLO con un array JSON valido:
-         [ { "title": "...", "description": "...", "isAI": true } ]`
+         Rispondi ESATTAMENTE E SOLO con un JSON valido strutturato così:
+         {
+           "tasks": [ { "title": "...", "description": "...", "isAI": true } ],
+           "automazione": { // PUO' ESSERE null SE NESSUNA AUTOMAZIONE E' NECESSARIA
+             "descrizione": "Spiega l'automazione",
+             "frequenza": "DAILY oppure WEEKLY",
+             "orario": "HH:00",
+             "fusoOrario": "Europe/Rome"
+           }
+         }`
       : `Sei il formidabile CTO e COO di questa startup. Il CEO ha appena CORRETTO IL TIRO e ti ha fornito nuove direttive essenziali.
-         Il tuo compito è scomporre la creazione di questo business in task operativi (da 3 a 10).
+         Il tuo compito è:
+         1. Scomporre la creazione di questo business in task operativi.
+         2. Valutare l'AUTOMAZIONE ATTUALE:
+            - Se va ancora bene, confermala.
+            - Se è sbagliata, cambiala.
+            - Se prima non c'era ma ora serve, creala.
+            - Se non serve più alcuna automazione, imposta "automazione" a null.
          
          OBIETTIVO SUPREMO: MASSIMIZZARE IL LAVORO DELL'AI.
          
-         Rispondi ESATTAMENTE E SOLO con un array JSON valido:
-         [ { "title": "...", "description": "...", "isAI": true } ]`;
+         Rispondi ESATTAMENTE E SOLO con un JSON valido strutturato così:
+         {
+           "tasks": [ { "title": "...", "description": "...", "isAI": true } ],
+           "automazione": { // PUO' ESSERE null SE NESSUNA AUTOMAZIONE E' PIU' UTILE
+             "descrizione": "Spiega l'automazione",
+             "frequenza": "DAILY oppure WEEKLY",
+             "orario": "HH:00",
+             "fusoOrario": "Europe/Rome"
+           }
+         }`;
 
     const userPrompt = `Dettagli aggiornati:
     Nome: ${venture.name}
     Nicchia: ${venture.niche}
-    NUOVA SITUAZIONE / NUOVE DIRETTIVE DEL CEO: ${newDescription}`;
+    NUOVA SITUAZIONE / NUOVE DIRETTIVE DEL CEO: ${newDescription}
+
+    🤖 AUTOMAZIONE ATTUALE IN CORSO:
+    Descrizione: ${venture.dailyAutomation || 'Nessuna automazione presente.'}
+    Frequenza: ${venture.automationFrequency || 'N/A'}
+    Orario e Fuso: ${venture.automationTime || 'N/A'} (${venture.automationTimezone || 'N/A'})
+
+    (NOTA: Valuta obiettivamente. Se serve, confermala o aggiornala. Se è del tutto inutile, restituisci "automazione": null nel JSON).`;
 
     const aiResponse = await AIOrchestrator.executePrompt(userId, 'EXECUTION_PLAN', systemPrompt, userPrompt, ventureId);
     
-    const cleanJson = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
-    const tasksData = JSON.parse(cleanJson);
-
-    const createdTasks = [];
-    for (const t of tasksData) {
-      const newTask = await prisma.task.create({
-        data: {
-          ventureId,
-          title: t.title,
-          description: t.description,
-          isAI: t.isAI,
-          status: 'TODO'
-        }
-      });
-      createdTasks.push(newTask);
+    let parsedData;
+    try {
+      const cleanJson = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+      parsedData = JSON.parse(cleanJson);
+    } catch (e) {
+      throw new Error('L\'AI non ha restituito un formato valido.');
     }
 
-    res.status(200).json({ message: 'Ricalibrazione completata!', data: createdTasks });
+    // 3. Aggiorniamo la Venture salvando il nuovo testo E la nuova automazione
+    await prisma.venture.update({
+      where: { id: ventureId },
+      data: { 
+        description: newDescription,
+        aiStrategy: null, // Puliamo l'eventuale strategia di pivot
+        dailyAutomation: parsedData.automazione?.descrizione || null,
+        automationFrequency: parsedData.automazione?.frequenza || null,
+        automationTime: parsedData.automazione?.orario || null,
+        automationTimezone: parsedData.automazione?.fusoOrario || null
+      }
+    });
+
+    // 4. Creiamo i nuovi Task nel database
+    const createdTasks = [];
+    if (parsedData.tasks && Array.isArray(parsedData.tasks)) {
+      for (const t of parsedData.tasks) {
+        const newTask = await prisma.task.create({
+          data: {
+            ventureId,
+            title: t.title,
+            description: t.description,
+            isAI: t.isAI,
+            status: 'TODO'
+          }
+        });
+        createdTasks.push(newTask);
+      }
+    }
+
+    res.status(200).json({ message: 'Ricalibrazione di Task e Automazioni completata!', data: createdTasks });
 
   } catch (error: any) {
     console.error('[Recalibration Error]:', error);
